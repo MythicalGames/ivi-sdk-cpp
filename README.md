@@ -10,7 +10,8 @@ The *IVI C++ SDK* is a turnkey wrapper and management layer around the underlyin
 * Should be compatible with any `C++11` compliant toolchain that can build gRPC, and should also work with `C++14` and `C++17` language standards.
 
 Given cmake and an appropriate C++ toolchain installed, from the ivi-sdk-native directory, simply run:
-`cmake --build ./`
+`cmake ./` to auto-configure the cmake cache and download dependencies
+`cmake --build ./` to compile everything, including the example program
 
 See `ivi-sdk-example.cpp` for a basic demonstration on how to interact with the SDK.
 
