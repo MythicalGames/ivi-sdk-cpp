@@ -143,7 +143,8 @@ add_custom_command(
       OUTPUT ${ivi_proto_srcs} ${ivi_proto_hdrs} ${ivi_grpc_srcs} ${ivi_grpc_hdrs}
       DEPENDS ${ivi_protos}
       COMMAND ${_PROTOBUF_PROTOC}
-      ARGS --grpc_out "${ivi_proto_gen_dir}"
+      ARGS 
+	    --grpc_out "${ivi_proto_gen_dir}"
         --cpp_out "${ivi_proto_gen_dir}"
         -I "${ivi-sdk-proto_SOURCE_DIR}" 
         -I "${grpc-ivi_SOURCE_DIR}/third_party/protobuf/src"
@@ -151,40 +152,48 @@ add_custom_command(
         ${ivi_protos}
 )
 
-# Include generated *.pb.h files
-include_directories("${ivi_proto_gen_base_dir}")
-
-# static vs dynamic linkage specifier
-if(NOT ${IVI_SDK_EXPORT})
-   add_compile_definitions(IVI_SDK_NOEXPORT)
-   # note - we do not propagate dynamic linkage to protobuf/gRPC
-endif()
-
-if(MSVC)
-    add_compile_options(/wd4251) #disable warnings about STL linkage
-endif() # MSVC
-
-# Add source to this project's lib.
-add_library (ivi-sdk-cpp STATIC
+add_library( ivi-sdk-cpp-generated STATIC
     ${ivi_proto_srcs}     
     ${ivi_proto_hdrs}     
     ${ivi_grpc_srcs} 
     ${ivi_grpc_hdrs} 
-    ${ivi_sdk_src}
-    ${ivi_sdk_hdrs}
 )
 
-target_include_directories(ivi-sdk-cpp 
-    PUBLIC include 
-    PUBLIC "${grpc_SOURCE_DIR}/third_party/protobuf/src"
-    PUBLIC ${ivi_proto_gen_base_dir}
-	INTERFACE "src"
-    PRIVATE ${ivi_proto_gen_dir}
- )
+target_include_directories( ivi-sdk-cpp-generated
+	PUBLIC ${ivi_proto_gen_dir}
+	PUBLIC "${grpc_SOURCE_DIR}/third_party/protobuf/src")
 
-target_link_libraries(ivi-sdk-cpp PUBLIC 
+target_link_libraries(ivi-sdk-cpp-generated 
+  PUBLIC 
     ${_REFLECTION}
     ${_GRPC_GRPCPP}
     ${_PROTOBUF_LIBPROTOBUF}
- )
+)
 
+# static vs dynamic linkage specifier for IVI
+if(${IVI_SDK_EXPORT})
+   add_library (ivi-sdk-cpp SHARED
+       ${ivi_sdk_src}
+       ${ivi_sdk_hdrs})
+   
+   if(MSVC)
+       add_compile_options(/wd4251) #disable warnings about STL linkage
+   endif() # MSVC
+
+else() # NOT IVI_SDK_EXPORT
+   add_library (ivi-sdk-cpp STATIC
+       ${ivi_sdk_src}
+       ${ivi_sdk_hdrs})
+   target_compile_definitions(ivi-sdk-cpp PUBLIC IVI_SDK_NOEXPORT)
+endif() # IVI_SDK_EXPORT
+
+# protobuf/gRPC dependencies are not exposed publicly
+
+target_include_directories(ivi-sdk-cpp 
+    PUBLIC include 
+    PRIVATE ${ivi_proto_gen_base_dir}
+)
+
+target_link_libraries(ivi-sdk-cpp 
+  PRIVATE ivi-sdk-cpp-generated
+)

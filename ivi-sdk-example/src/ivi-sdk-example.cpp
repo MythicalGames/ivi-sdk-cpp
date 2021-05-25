@@ -48,9 +48,9 @@ int main(int argc, char* argv[])
     // if you decide to go the dynamic linkage route, don't forget to check this
     IVI_CHECK(IVISDKAPIVersion() == IVI_SDK_API_VERSION);
 
-    char* iviHost = nullptr; 
-    char* iviEnv = nullptr;
-    char* iviApiKey = nullptr;
+    const char* iviHost = nullptr; 
+    const char* iviEnv = nullptr;
+    const char* iviApiKey = nullptr;
     if (argc >= 3)
     {
         IVI_LOG_INFO("Using connection info from command-line");
@@ -227,11 +227,11 @@ int main(int argc, char* argv[])
         std::this_thread::sleep_for(10ms);
     }
 
-    int numFailures = 0, numSuccesses = 0, total = 10;
+    int numFailures = 0, numSuccesses = 0;
+    const int totalAsync = 10, totalSync = 1;
     IVI_LOG_INFO("Synchronously creating 1 item; this can be slow - see log timestamps");
-    //    for (int i = 0; i < 10; ++i)
+        for (int i = 0; i < totalSync; ++i)
     {
-        ++total;
         IVIResultItemStateUpdate issueResult = clientMgrSync.ItemClient().IssueItem(
             MakeRandomString(8),
             playerIds[0],
@@ -258,7 +258,7 @@ int main(int argc, char* argv[])
 
     IVI_LOG_INFO("Issuing some items asynchronously...");
 
-    for (int i = 0; i < total; ++i)
+    for (int i = 0; i < totalAsync; ++i)
     {
         auto issueItemCallback = [&](const IVIResultItemStateUpdate& issueResult)
         {
@@ -329,7 +329,7 @@ int main(int argc, char* argv[])
         std::this_thread::sleep_for(10ms);
     }
 
-    IVI_LOG_INFO("IssuesItems maxSupply=", maxSupply, " total=", total, " numSuccesses=", numSuccesses, " numFailures=", numFailures);
+    IVI_LOG_INFO("IssuesItems maxSupply=", maxSupply, " total=", (totalAsync + totalSync), " numSuccesses=", numSuccesses, " numFailures=", numFailures);
 
     return 0;
 }

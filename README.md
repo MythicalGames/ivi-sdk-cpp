@@ -5,20 +5,20 @@ The *IVI C++ SDK* is a turnkey wrapper and management layer around the underlyin
 
 ## Building
 
-* Uses CMake
-* Tested against Win32 MSVC 16 and Ubuntu 20.04 with both gcc and clang.
+* Uses CMake.
+* Tested against Win32 MSVC 16 (VS 2019) and Ubuntu 20.04 with both gcc and clang.
 * Should be compatible with any `C++11` compliant toolchain that can build gRPC, and should also work with `C++14` and `C++17` language standards.
 
 Given cmake and an appropriate C++ toolchain installed, from the ivi-sdk-native directory, simply run:
-`cmake ./` to auto-configure the cmake cache and download dependencies
-`cmake --build ./` to compile everything, including the example program
+* `cmake ./` to auto-configure the cmake cache and download dependencies
+* `cmake --build ./` to compile everything, including the example program
 
 See `ivi-sdk-example.cpp` for a basic demonstration on how to interact with the SDK.
 
 Run the `ivi-sdk-example` executable to see it connect and perform some trivial and naive calls to the IVI API, including bad RPC calls to demonstrate error handling.  You will have to supply a valid environment ID, API key, and optionally a specific IVI host as command line arguments or environment variables.
 
-Additionally, on Windows you will need to manually supply a certificate PEM file for gRPC's SSL connection. The one packaged with gRPC is sufficient and can be specified by setting this environment variable appropriately:
-```GRPC_DEFAULT_SSL_ROOTS_FILE_PATH=[ROOT]\ivi-sdk-native\_deps\grpc-ivi-src\etc\roots.pem```
+Additionally, on Windows you will need to manually supply a certificate PEM file for gRPC's SSL connection. The one packaged with gRPC is sufficient and can be specified by setting this environment variable appropriately after running cmake:
+```GRPC_DEFAULT_SSL_ROOTS_FILE_PATH=[ROOT]\ivi-sdk-cpp\_deps\grpc-ivi-src\etc\roots.pem```
 
 The IVI SDK's `CMakeLists.txt` configurations are purposely minimalist and rely on `FetchContent` for the gRPC dependency to simplify integration into other dependency trees, and are based on [gRPC C++'s recommendations](https://github.com/grpc/grpc/tree/master/src/cpp).  The IVI cmake configuration purposely eschews system-installed gRPC detection in preferance of a local known-working version fetched under the name `grpc-ivi` though theoretically any compatible version of gRPC should work.
 
@@ -38,7 +38,7 @@ The `IVIClientManagerSync` class provides a blocking interface to the IVI API.  
 
 There is no SDK requirement to use the prewritten _ClientManager_ classes, they only rely on the public interfaces of the various Client wrappers and gRPC, there is no usage of `friend` semantics in the SDK.
 
-The SDK is written with public dependencies only on basic STL types.  These types have been aliased in `ivi-types.h` should you decide to subsitute other STL-interface-compatible types, however be aware that the underlying protobuf and gRPC libraries heavily relies on STL.
+The SDK is written with public dependencies only on basic STL types.  These types have been aliased in `ivi-types.h` should you decide to subsitute other STL-interface-compatible types, however be aware that the underlying protobuf and gRPC libraries heavily rely on STL.
 
 ## Minutae
 
