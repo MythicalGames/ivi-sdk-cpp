@@ -137,6 +137,7 @@ namespace ivi
         using StreamClientT         = typename TraitsT::StreamClient;
         using CallbackT             = typename TraitsT::CallbackType;
         using MessageT              = typename TraitsT::MessageType;
+        using ParsedMessageT        = typename TraitsT::ParsedMessageType;
         using ServiceT              = typename TraitsT::ServiceType;
         using Base                  = IVIClientT<ServiceT>;
 
@@ -150,7 +151,6 @@ namespace ivi
 
         template<
             typename TSubscriber,
-            typename TResponseHandler,
             typename TConfirmer
         >        
                                     IVIStreamClientT(
@@ -158,7 +158,6 @@ namespace ivi
                                         const IVIConnectionPtr& conn,
                                         const CallbackT& callback,
                                         TSubscriber&& subscribe,
-                                        TResponseHandler&& onResponse,
                                         TConfirmer&& sendConfirm);
         
         template<
@@ -171,8 +170,7 @@ namespace ivi
 
         const MessageT&             CurrentMessage() const;
 
-        template<typename... Args>  
-        void                        OnCallback(Args&&... args);
+        void                        OnCallback(const ParsedMessageT& message);
 
     private:
 
@@ -182,11 +180,9 @@ namespace ivi
         void                        ReadNext();
 
         template<
-            typename TResponseHandler,
             typename TConfirmer
         >
         void                        ProcessNext(
-                                        TResponseHandler&& onResponse,
                                         TConfirmer&& sendConfirm,
                                         bool ok);
 

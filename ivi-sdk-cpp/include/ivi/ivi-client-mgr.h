@@ -12,8 +12,6 @@ namespace ivi
 
         const IVIConfiguration&     GetConfig() const;
 
-
-
     protected:
 
                                     IVIClientManager(
@@ -28,14 +26,13 @@ namespace ivi
     /*
     * GENERAL USE
     * IVIClientManagerAsync is the root object for managing the various asynchronous IVI clients.
-    * It is not thread-safe, nor are its children: either allocate 1 instance per thread, or
-    * share a single instance safely using your favorite concurrent-safety mechanism.
-    *
-    * Poll() must regularly be called to poll for and process responses and fire off callbacks
-    * (event-loop pattern).
+    * It operates as a basic event-loop dispatcher.  Poll() must regularly be called to poll 
+    * for and process network responses and fire off callbacks.
+    * It is not guaranteed thread-safe, nor are the Clients: either allocate 1 instance per thread, 
+    * or share a single instance safely using your favorite concurrent-safety wrapper.    * 
     * 
     * Poll() attempts to be fault-tolerant but may stall the thread for limited fixed time
-    * while attempting to recover from an error.
+    * while attempting to recover from an error, configurable by IVIConnection.
     *
     * ADVANCED OPTION
     * The IVIConfiguration::autoconfirmStreamUpdates boolean controls whether the stream
@@ -49,6 +46,10 @@ namespace ivi
     *       the data from from your stream reader thread to your unary writer thread to call Confirm.
     *       Note: IVI does not currently have any stream write RPC calls aside from stream
     *       initialization, so there is currently no need for stream writer thread.
+    *   (4) You also are responsible for handling connection faults, eg calling Reinitialize().
+    *       You can familiarize yourself with these semantics by examining the Poll() implementations.
+    * Using IVIClientManagerAsync this way is untested at present.
+    *       
     *
     * SELF-MANAGEMENT OPTION
     * You are also free to bypass IVIClientManager / Poll*() and use and maintain the various clients
@@ -117,6 +118,8 @@ namespace ivi
 
         IVIItemTypeClientAsync&     ItemTypeClient();
 
+        IVIOrderClientAsync&        OrderClient();
+        
         IVIPaymentClientAsync&      PaymentClient();
 
         IVIPlayerClientAsync&       PlayerClient();
@@ -148,6 +151,8 @@ namespace ivi
 
         IVIItemTypeClientAsync      m_itemTypeClientAsync;
 
+        IVIOrderClientAsync         m_orderClientAsync;
+
         IVIPaymentClientAsync       m_paymentClientAsync;
 
         IVIPlayerClientAsync        m_playerClientAsync;
@@ -159,8 +164,6 @@ namespace ivi
         IVIOrderStreamClient        m_orderStreamClient;
 
         IVIPlayerStreamClient       m_playerStreamClient;
-
-        bool                        m_terminating : 1;
     };
 
     /*
@@ -190,6 +193,8 @@ namespace ivi
         IVIItemClient&              ItemClient();
 
         IVIItemTypeClient&          ItemTypeClient();
+        
+        IVIOrderClient&             OrderClient();
 
         IVIPaymentClient&           PaymentClient();
         
@@ -200,6 +205,8 @@ namespace ivi
         IVIItemClient               m_itemClient;
 
         IVIItemTypeClient           m_itemTypeClient;
+
+        IVIOrderClient              m_orderClient;
 
         IVIPaymentClient            m_paymentClient;
 

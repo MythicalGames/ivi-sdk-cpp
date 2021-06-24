@@ -3,6 +3,7 @@
 
 #include "ivi/ivi-client-t.h"
 #include "ivi/ivi-config.h"
+#include "ivi/ivi-enum.h"
 #include "ivi/ivi-executor.h"
 #include "ivi/ivi-types.h"
 
@@ -23,7 +24,7 @@ namespace ivi
 
     using IVIResultItem                 = IVIResultT<IVIItem>;
     using IVIResultItemList             = IVIResultT<IVIItemList>;
-    using IVIResultItemStateUpdate      = IVIResultT<IVIItemStateUpdate>;
+    using IVIResultItemStateChange      = IVIResultT<IVIItemStateChange>;
 
     class IVI_SDK_API IVIItemClient
         : public IVIClientT<rpc::api::item::ItemService>
@@ -31,7 +32,7 @@ namespace ivi
     public:
         using                           IVIClientT<ServiceT>::IVIClientT;
 
-         IVIResultItemStateUpdate       IssueItem(
+         IVIResultItemStateChange       IssueItem(
                                             const string& gameInventoryId,
                                             const string& playerId,
                                             const string& itemName,
@@ -43,13 +44,13 @@ namespace ivi
                                             const string& orderId,
                                             const string& requestIp);
 
-         IVIResultItemStateUpdate       TransferItem(
+         IVIResultItemStateChange       TransferItem(
                                             const string& gameInventoryId,
                                             const string& sourcePlayerId,
                                             const string& destPlayerId,
                                             const string& storeId);
 
-         IVIResultItemStateUpdate       BurnItem(
+         IVIResultItemStateChange       BurnItem(
                                             const string& gameInventoryId);
 
 
@@ -60,8 +61,8 @@ namespace ivi
          IVIResultItemList              GetItems(
                                             time_t createdTimestamp,
                                             int32_t pageSize,
-                                            SortOrder::SortOrder sortOrder,
-                                            Finalized::Finalized finalized);
+                                            SortOrder sortOrder,
+                                            Finalized finalized);
 
          IVIResult                      UpdateItemMetadata(
                                             const string& gameInventoryId,
@@ -93,19 +94,19 @@ namespace ivi
                                             const string& storeId,
                                             const string& orderId,
                                             const string& requestIp,
-                                            const function<void(const IVIResultItemStateUpdate&)>& callback);
+                                            const function<void(const IVIResultItemStateChange&)>& callback);
 
         void                            TransferItem(
                                             const string& gameInventoryId,
                                             const string& sourcePlayerId,
                                             const string& destPlayerId,
                                             const string& storeId,
-                                            const function<void(const IVIResultItemStateUpdate&)>& callback);
+                                            const function<void(const IVIResultItemStateChange&)>& callback);
 
 
         void                            BurnItem(
                                             const string& gameInventoryId,
-                                            const function<void(const IVIResultItemStateUpdate&)>& callback);
+                                            const function<void(const IVIResultItemStateChange&)>& callback);
 
         void                            GetItem(
                                             const string& gameInventoryId,
@@ -119,8 +120,8 @@ namespace ivi
         void                            GetItems(
                                             time_t createdTimestamp,
                                             int32_t pageSize,
-                                            SortOrder::SortOrder sortOrder,
-                                            Finalized::Finalized finalized,
+                                            SortOrder sortOrder,
+                                            Finalized finalized,
                                             const function<void(const IVIResultItemList&)>& callback);
 
         void                            UpdateItemMetadata(
@@ -141,7 +142,7 @@ namespace ivi
 
     using IVIResultItemType             = IVIResultT<IVIItemType>;
     using IVIResultItemTypeList         = IVIResultT<IVIItemTypeList>;
-    using IVIResultItemTypeStateUpdate  = IVIResultT<IVIItemTypeStateUpdate>;
+    using IVIResultItemTypeStateChange  = IVIResultT<IVIItemTypeStateChange>;
 
     class IVI_SDK_API IVIItemTypeClient
         : public IVIClientT<rpc::api::itemtype::ItemTypeService>
@@ -149,11 +150,13 @@ namespace ivi
     public:
         using                           IVIClientT<ServiceT>::IVIClientT;
 
-        IVIResultItemType               GetItemType(const string& gameItemTypeId);
+        IVIResultItemType               GetItemType(
+                                            const string& gameItemTypeId);
 
-        IVIResultItemTypeList           GetItemTypes(const StringList& gameItemTypeIds);
+        IVIResultItemTypeList           GetItemTypes(
+                                            const StringList& gameItemTypeIds);
 
-        IVIResultItemTypeStateUpdate    CreateItemType(
+        IVIResultItemTypeStateChange    CreateItemType(
                                             const string& gameItemTypeId,
                                             const string& tokenName,
                                             const string& category,
@@ -165,7 +168,8 @@ namespace ivi
                                             const UUIDList& agreementIds,
                                             const IVIMetadata& metadata);
     
-        IVIResultItemTypeStateUpdate    FreezeItemType(const string& gameItemTypeId);
+        IVIResultItemTypeStateChange    FreezeItemType(
+                                            const string& gameItemTypeId);
 
         IVIResult                       UpdateItemTypeMetadata(
                                             const string& gameItemTypeId,
@@ -197,11 +201,11 @@ namespace ivi
                                             bool sellable,
                                             const UUIDList& agreementIds,
                                             const IVIMetadata& metadata,
-                                            const function<void(const IVIResultItemTypeStateUpdate&)>& callback);
+                                            const function<void(const IVIResultItemTypeStateChange&)>& callback);
 
         void                            FreezeItemType(
                                             const string& gameItemTypeId,
-                                            const function<void(const IVIResultItemTypeStateUpdate&)>& callback);
+                                            const function<void(const IVIResultItemTypeStateChange&)>& callback);
 
         void                            UpdateItemTypeMetadata(
                                             const string& gameItemTypeId,
@@ -211,7 +215,7 @@ namespace ivi
 
     using IVIResultPlayer               = IVIResultT<IVIPlayer>;
     using IVIResultPlayerList           = IVIResultT<IVIPlayerList>;
-    using IVIResultPlayerUpdate         = IVIResultT<IVIPlayerUpdate>;
+    using IVIResultPlayerStateChange    = IVIResultT<IVIPlayerStateChange>;
 
     class IVI_SDK_API IVIPlayerClient
         : public IVIClientT<rpc::api::player::PlayerService>
@@ -219,18 +223,19 @@ namespace ivi
     public:
         using                           IVIClientT<ServiceT>::IVIClientT;
 
-        IVIResultPlayerUpdate           LinkPlayer(
+        IVIResultPlayerStateChange      LinkPlayer(
                                             const string& playerId,
                                             const string& email,
                                             const string& displayName,
                                             const string& requestIp);
 
-        IVIResultPlayer                 GetPlayer(const string& playerId);
+        IVIResultPlayer                 GetPlayer(
+                                            const string& playerId);
 
         IVIResultPlayerList             GetPlayers(
                                             time_t createdTimestamp, 
                                             int32_t pageSize,
-                                            SortOrder::SortOrder sortOrder);
+                                            SortOrder sortOrder);
     };
 
     class IVI_SDK_API IVIPlayerClientAsync
@@ -244,7 +249,7 @@ namespace ivi
                                             const string& email,
                                             const string& displayName,
                                             const string& requestIp,
-                                            const function<void(const IVIResultPlayerUpdate&)>& callback);
+                                            const function<void(const IVIResultPlayerStateChange&)>& callback);
 
         void                            GetPlayer(
                                             const string& playerId,
@@ -253,7 +258,7 @@ namespace ivi
         void                            GetPlayers(
                                             time_t createdTimestamp,
                                             int32_t pageSize,
-                                            SortOrder::SortOrder sortOrder,
+                                            SortOrder sortOrder,
                                             const function<void(const IVIResultPlayerList&)>& callback);
     };
 
@@ -274,18 +279,8 @@ namespace ivi
                                             const string& buyerPlayerId,
                                             const BigDecimal& subTotal,
                                             const IVIOrderAddress& address,
-                                            PaymentProviderId::PaymentProviderId paymentProviderId,
+                                            PaymentProviderId paymentProviderId,
                                             const IVIPurchasedItemsList& purchasedItems,
-                                            const string& metadata,
-                                            const string& requestIp);
-
-        IVIResultOrder                  CreateSecondaryOrder(
-                                            const string& storeId,
-                                            const string& buyerPlayerId,
-                                            const BigDecimal& subTotal,
-                                            const IVIOrderAddress& address,
-                                            PaymentProviderId::PaymentProviderId paymentProviderId,
-                                            const string& listingId,
                                             const string& metadata,
                                             const string& requestIp);
 
@@ -323,19 +318,8 @@ namespace ivi
                                             const string& buyerPlayerId,
                                             const BigDecimal& subTotal,
                                             const IVIOrderAddress& address,
-                                            PaymentProviderId::PaymentProviderId paymentProviderId,
+                                            PaymentProviderId paymentProviderId,
                                             const IVIPurchasedItemsList& purchasedItems,
-                                            const string& metadata,
-                                            const string& requestIp,
-                                            const function<void(const IVIResultOrder&)> callback);
-
-        void                            CreateSecondaryOrder(
-                                            const string& storeId,
-                                            const string& buyerPlayerId,
-                                            const BigDecimal& subTotal,
-                                            const IVIOrderAddress& address,
-                                            PaymentProviderId::PaymentProviderId paymentProviderId,
-                                            const string& listingId,
                                             const string& metadata,
                                             const string& requestIp,
                                             const function<void(const IVIResultOrder&)> callback);
@@ -371,7 +355,7 @@ namespace ivi
         using                           IVIClientT<ServiceT>::IVIClientT;
 
         IVIResultToken                  GetToken(
-                                            PaymentProviderId::PaymentProviderId id,
+                                            PaymentProviderId id,
                                             const string& playerId);
     };
 
@@ -382,9 +366,9 @@ namespace ivi
         using                           IVIClientT<ServiceT>::IVIClientT;
 
         void                            GetToken(
-                                            PaymentProviderId::PaymentProviderId id,
+                                            PaymentProviderId id,
                                             const string& playerId,
-                                            function<void(const IVIResultToken&)>& callback);
+                                            const function<void(const IVIResultToken&)>& callback);
     };
 
     class IVIItemStreamClient;
@@ -393,6 +377,7 @@ namespace ivi
         using StreamClient          = IVIItemStreamClient;
         using CallbackType          = OnItemUpdated;
         using MessageType           = rpc::streams::item::ItemStatusUpdate;
+        using ParsedMessageType     = IVIItemStatusUpdate;
         using ServiceType           = rpc::streams::item::ItemStream;
     };
 
@@ -408,7 +393,7 @@ namespace ivi
         void                        Confirm(
                                         const string& gameInventoryId,
                                         const string& trackingId,
-                                        ItemState::ItemState itemState);
+                                        ItemState itemState);
     };
 
     class IVIItemTypeStreamClient;
@@ -417,6 +402,7 @@ namespace ivi
         using StreamClient          = IVIItemTypeStreamClient;
         using CallbackType          = OnItemTypeUpdated;
         using MessageType           = rpc::streams::itemtype::ItemTypeStatusUpdate;
+        using ParsedMessageType     = IVIItemTypeStatusUpdate;
         using ServiceType           = rpc::streams::itemtype::ItemTypeStatusStream;
     };
 
@@ -432,7 +418,7 @@ namespace ivi
         void                        Confirm(
                                         const string& gameItemTypeId,
                                         const string& trackingId,
-                                        ItemTypeState::ItemTypeState itemTypeState);
+                                        ItemTypeState itemTypeState);
     };
 
     class IVIOrderStreamClient;
@@ -441,6 +427,7 @@ namespace ivi
         using StreamClient          = IVIOrderStreamClient;
         using CallbackType          = OnOrderUpdated;
         using MessageType           = rpc::streams::order::OrderStatusUpdate;
+        using ParsedMessageType     = IVIOrderStatusUpdate;
         using ServiceType           = rpc::streams::order::OrderStream;
     };
 
@@ -455,7 +442,7 @@ namespace ivi
 
         void                        Confirm(
                                         const string& orderId,
-                                        OrderState::OrderState orderState);
+                                        OrderState orderState);
     };
 
     class IVIPlayerStreamClient;
@@ -464,6 +451,7 @@ namespace ivi
         using StreamClient          = IVIPlayerStreamClient;
         using CallbackType          = OnPlayerUpdated;
         using MessageType           = rpc::streams::player::PlayerStatusUpdate;
+        using ParsedMessageType     = IVIPlayerStatusUpdate;
         using ServiceType           = rpc::streams::player::PlayerStream;
     };
 
@@ -479,7 +467,7 @@ namespace ivi
         void                        Confirm(
                                         const string& playerId,
                                         const string& trackingId,
-                                        PlayerState::PlayerState playerState);
+                                        PlayerState playerState);
     };
 }
 

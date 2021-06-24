@@ -4,11 +4,14 @@
 #include <algorithm>
 #include <cstdint>
 #include <ctime>
+#include <functional>
+#include <iterator>
 #include <list>
 #include <memory>
-#include <functional>
+#include <sstream>
 #include <string>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 
 /*
@@ -30,23 +33,29 @@ namespace grpc
     class ChannelArguments;
     class ClientContext;
     class CompletionQueue;
-    template<typename R> class ClientAsyncResponseReader;
     class Status;
 }
 
 namespace ivi
 {
     // STL aliases in case they need to be changed to alternate implementations
+    using std::back_inserter;
+    using std::enable_if;
     using std::forward;
     using std::function;
     using std::get;
+    using std::initializer_list;
     using std::int32_t;
     using std::int64_t;
+    using std::is_same;
     using std::list;
+    using std::make_pair;
     using std::make_shared;
     using std::move;
     using std::numeric_limits;
+    using std::ostringstream;
     using std::shared_ptr;
+    using std::stoi;
     using std::string;
     using std::time_t;
     using std::transform;
@@ -67,8 +76,8 @@ namespace ivi
     struct IVIItemType;
     using IVIItemTypeList           = list<IVIItemType>;
 
-    struct IVIItemStateUpdate;
-    struct IVIItemTypeStateUpdate;
+    struct IVIItemStateChange;
+    struct IVIItemTypeStateChange;
 
     struct IVIMetadata;
 
@@ -82,12 +91,16 @@ namespace ivi
     struct IVIPlayer;
     using IVIPlayerList             = list<IVIPlayer>;
 
-    struct IVIPlayerUpdate;
-
     struct IVIPurchasedItems;
     using IVIPurchasedItemsList      = list<IVIPurchasedItems>;
 
     struct IVIToken;
+
+    struct IVIItemStatusUpdate;
+    struct IVIItemTypeStatusUpdate;
+    struct IVIOrderStatusUpdate;
+    struct IVIPlayerStatusUpdate;
+    using IVIPlayerStateChange      = IVIPlayerStatusUpdate;
 
     struct IVIConnection;
     using IVIConnectionPtr          = shared_ptr<IVIConnection>;
@@ -148,7 +161,6 @@ namespace ivi
                 class ItemTypeOrder;
                 class Order;
                 class PaymentRequestProto;
-                namespace payment       { enum PaymentProviderId : int; }
             }
             namespace payment           { class Token; }
             namespace player            { class IVIPlayer; }
@@ -156,12 +168,6 @@ namespace ivi
         namespace common
         {
             class Metadata;
-            namespace finalization      { enum Finalized : int; }
-            namespace item              { enum ItemState : int; }
-            namespace itemtype          { enum ItemTypeState : int; }
-            namespace order             { enum OrderState : int; }
-            namespace player            { enum PlayerState : int; }
-            namespace sort              { enum SortOrder : int; }
         }
     }
 
@@ -214,15 +220,6 @@ namespace ivi
             }
         }
     }
-
-    // Import protobuf C99 enums into namespace aliases 
-    namespace Finalized             = proto::common::finalization;
-    namespace ItemState             = proto::common::item;
-    namespace ItemTypeState         = proto::common::itemtype;
-    namespace OrderState            = proto::common::order;
-    namespace PaymentProviderId     = proto::api::order::payment;
-    namespace PlayerState           = proto::common::player;
-    namespace SortOrder             = proto::common::sort;
 
     // Fat pointer encapsulation for gRPC tags.  See IVIClientManager comments for implementation details.
     using AsyncCallback = function<void(bool)>;

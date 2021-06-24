@@ -6,14 +6,11 @@
 #include <ctime>
 #include <iomanip>
 #include <iostream>
-#include <sstream>
 #include <unordered_map>
 
 namespace ivi
 {
-    using std::string;
-
-    static void DefaultLog(LogLevel /*logLevel*/, const std::string& str)
+    static void DefaultLog(LogLevel /*logLevel*/, const string& str)
     {
 #if IVI_LOGGING_CERR
         std::cerr
@@ -29,6 +26,7 @@ namespace ivi
         { static_cast<int>(LogLevel::NTRACE),     "[NTRACE]   "},
         { static_cast<int>(LogLevel::VERBOSE),    "[VERBOSE]  "},
         { static_cast<int>(LogLevel::INFO),       "[INFO]     "},
+        { static_cast<int>(LogLevel::RPC_FAIL),   "[RPC_FAIL] "},
         { static_cast<int>(LogLevel::WARNING),    "[WARNING]  "},
         { static_cast<int>(LogLevel::CRITICAL),   "[CRITICAL] "}
     };
@@ -52,13 +50,13 @@ namespace ivi
             << std::setfill('0') << std::setw(3) << ms.count() << "] ";
     }
 
-    static void DefaultLogStream(LogLevel logLevel, std::ostringstream& oss)
+    static void DefaultLogStream(LogLevel logLevel, ostringstream& oss)
     {
         oss << std::endl;
         IVILogImpl(logLevel, oss.str());
     }
 
-    void LogPrefix(LogLevel logLevel, std::ostringstream& oss)
+    void LogPrefix(LogLevel logLevel, ostringstream& oss)
     {
         CurrentTimeString(oss);
         oss << LogLevelPrefix[static_cast<int>(logLevel)];

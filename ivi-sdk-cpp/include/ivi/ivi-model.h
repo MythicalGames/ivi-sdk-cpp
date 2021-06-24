@@ -1,6 +1,7 @@
 #ifndef __IVI_MODEL_H__
 #define __IVI_MODEL_H__
 
+#include "ivi/ivi-enum.h"
 #include "ivi/ivi-sdk.h"
 #include "ivi/ivi-types.h"
 
@@ -21,8 +22,8 @@ namespace ivi
         string                          image;
         string                          properties;
 
-        static IVIMetadata              fromProto(const proto::common::Metadata& metadata);
-        proto::common::Metadata         toProto() const;
+        static IVIMetadata              FromProto(const proto::common::Metadata& metadata);
+        proto::common::Metadata         ToProto() const;
     };
 
     struct IVI_SDK_API IVIMetadataUpdate
@@ -30,7 +31,7 @@ namespace ivi
         string                                  gameInventoryId;
         IVIMetadata                             metadata;
 
-        proto::api::item::UpdateItemMetadata    toProto() const;
+        proto::api::item::UpdateItemMetadata    ToProto() const;
     };
 
     struct IVI_SDK_API IVIItem
@@ -46,11 +47,12 @@ namespace ivi
         string                          metadataUri;
         string                          trackingId;
         IVIMetadata                     metadata;
-        ItemState::ItemState            itemState;
         time_t                          createdTimestamp;
         time_t                          updatedTimestamp;
+        ItemState                       itemState;
 
-        static IVIItem                  fromProto(const proto::api::item::Item& item);
+        static IVIItem                  FromProto(const proto::api::item::Item& item);
+        proto::api::item::Item          ToProto() const;
     };
 
     struct IVI_SDK_API IVIItemType
@@ -69,14 +71,15 @@ namespace ivi
         IVIMetadata                     metadata;
         time_t                          createdTimestamp;
         time_t                          updatedTimestamp;
-        ItemTypeState::ItemTypeState    itemTypeState;
-        bool                            fungible;
-        bool                            burnable;
-        bool                            transferable;
-        bool                            finalized;
-        bool                            sellable;
+        ItemTypeState                   itemTypeState;
+        bool                            fungible : 1;
+        bool                            burnable : 1;
+        bool                            transferable : 1;
+        bool                            finalized : 1;
+        bool                            sellable : 1;
 
-        static IVIItemType              fromProto(const proto::api::itemtype::ItemType& itemType);
+        static IVIItemType              FromProto(const proto::api::itemtype::ItemType& itemType);
+        proto::api::itemtype::ItemType  ToProto() const;
     };
 
     struct IVI_SDK_API IVIOrderAddress
@@ -91,8 +94,8 @@ namespace ivi
         string                          countryName;
         string                          countryIsoAlpha2;
 
-        static IVIOrderAddress          fromProto(const proto::api::order::Address& address);
-        proto::api::order::Address      toProto() const;
+        static IVIOrderAddress          FromProto(const proto::api::order::Address& address);
+        proto::api::order::Address      ToProto() const;
     };
 
     struct IVI_SDK_API IVIPurchasedItems
@@ -104,90 +107,124 @@ namespace ivi
         string                              currency;
         IVIMetadata                         metadata;
 
-        static IVIPurchasedItems            fromProto(const proto::api::order::ItemTypeOrder& purchasedItem);
-        
-        proto::api::order::ItemTypeOrder    toProto() const;
+        static IVIPurchasedItems            FromProto(const proto::api::order::ItemTypeOrder& purchasedItem);
+        proto::api::order::ItemTypeOrder    ToProto() const;
     };
 
     struct IVI_SDK_API IVIOrder
     {
-        string                                      orderId;
-        string                                      storeId;
-        string                                      buyerPlayerId;
-        BigDecimal                                  tax;
-        BigDecimal                                  total;
-        IVIOrderAddress                             address;
-        string                                      listingId;
-        PaymentProviderId::PaymentProviderId        paymentProviderId;
-        string                                      metadata;
-        string                                      createdBy;
-        string                                      requestIp;
-        string                                      environmentId;
-        OrderState::OrderState                      orderStatus;
-        time_t                                      createdTimestamp;
-        string                                      bitpayInvoice;
-        bool                                        primarySale;
-        bool                                        secondarySale;
+        string                              orderId;
+        string                              storeId;
+        string                              buyerPlayerId;
+        BigDecimal                          tax;
+        BigDecimal                          total;
+        IVIOrderAddress                     address;
+        string                              metadata;
+        string                              createdBy;
+        string                              requestIp;
+        string                              environmentId;
+        time_t                              createdTimestamp;
+        string                              bitpayInvoice;
+        PaymentProviderId                   paymentProviderId;
+        OrderState                          orderStatus;
 
-        static IVIOrder                             fromProto(const proto::api::order::Order& order);
+        static IVIOrder                     FromProto(const proto::api::order::Order& order);
+        proto::api::order::Order            ToProto() const;
     };
 
     struct IVI_SDK_API IVIFinalizeOrderResponse
     {
-        OrderState::OrderState              orderStatus;
         string                              paymentInstrumentType;
         string                              transactionId;
         string                              processorResponse;
-        int32_t                             fraudScore;
-        string                              omniScore;
-        bool                                success;
-        bool                                scoreIsValid;
+        int32_t                             fraudScore; // check scoreIsValid first
+        string                              omniScore;  // check scoreIsValid first
+        OrderState                          orderStatus;
+        bool                                success : 1;
+        bool                                scoreIsValid : 1;
 
-        static IVIFinalizeOrderResponse     fromProto(const proto::api::order::FinalizeOrderAsyncResponse& response);
+        static IVIFinalizeOrderResponse     FromProto(const proto::api::order::FinalizeOrderAsyncResponse& response);
     };
 
-    struct IVI_SDK_API IVIItemStateUpdate
+    struct IVI_SDK_API IVIItemStateChange
     {
         string                              gameInventoryId;
         string                              trackingId;
-        ItemState::ItemState                itemState;
+        ItemState                           itemState;
     };
 
-    struct IVI_SDK_API IVIItemTypeStateUpdate
+    struct IVI_SDK_API IVIItemTypeStateChange
     {
         string                              gameItemTypeId;
         string                              trackingId;
-        ItemTypeState::ItemTypeState        itemTypeState;
+        ItemTypeState                       itemTypeState;
     };
 
     struct IVI_SDK_API IVIPlayer
     {
-        string                              playerIdd;
+        string                              playerId;
         string                              email;
         string                              displayName;
         string                              sidechainAccountName;
         string                              trackingId;
-        PlayerState::PlayerState            playerState;
         time_t                              createdTimestamp;
+        PlayerState                         playerState;
 
-        static IVIPlayer                    fromProto(const proto::api::player::IVIPlayer& player);
-    };
-
-    struct IVI_SDK_API IVIPlayerUpdate
-    {
-        string                              playerId;
-        string                              trackingId;
-        PlayerState::PlayerState            playerState;
+        static IVIPlayer                    FromProto(const proto::api::player::IVIPlayer& player);
+        proto::api::player::IVIPlayer       ToProto() const;
     };
 
     struct IVI_SDK_API IVIToken
     {
-        PaymentProviderId::PaymentProviderId    paymentProviderId;  // Only Braintree is supported currently
-        string                                  braintreeToken;
+        string                              braintreeToken;
+        PaymentProviderId                   paymentProviderId;  // Only Braintree is supported currently
 
-        static IVIToken                         fromProto(const proto::api::payment::Token& token);
+        static IVIToken                     FromProto(const proto::api::payment::Token& token);
     };
 
+    struct IVI_SDK_API IVIPlayerStatusUpdate
+    {
+        string                              playerId;
+        string                              trackingId;
+        PlayerState                         playerState;
+
+        static IVIPlayerStatusUpdate        FromProto(const rpc::streams::player::PlayerStatusUpdate& psu);
+    };
+	
+    struct IVI_SDK_API IVIItemStatusUpdate
+    {
+        string                              gameInventoryId;
+        string                              gameItemTypeId;
+        string                              playerId;
+        string                              metadataUri;
+        string                              trackingId;
+        int64_t                             dgoodsId;
+        int32_t                             serialNumber;
+        ItemState                           itemState;
+
+        static IVIItemStatusUpdate          FromProto(const rpc::streams::item::ItemStatusUpdate& isu);
+    };
+
+    struct IVI_SDK_API IVIItemTypeStatusUpdate
+    {
+        string                              gameItemTypeId;
+        string                              baseUri;
+        string                              trackingId;
+        int32_t                             currentSupply;
+        int32_t                             issuedSupply;
+        int32_t                             issueTimeSpan;
+        ItemTypeState                       itemTypeState;
+
+        static IVIItemTypeStatusUpdate      FromProto(const rpc::streams::itemtype::ItemTypeStatusUpdate& itsu);
+    };
+
+    struct IVI_SDK_API IVIOrderStatusUpdate
+    {
+        string                              orderId;
+        OrderState                          orderState;
+
+        static IVIOrderStatusUpdate         FromProto(const rpc::streams::order::OrderStatusUpdate& osu);
+    };
 } // namespace ivi
 
 #endif // __IVI_MODEL_H__

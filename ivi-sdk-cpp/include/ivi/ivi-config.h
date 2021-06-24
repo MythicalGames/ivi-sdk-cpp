@@ -12,12 +12,19 @@ namespace ivi
         string                                  environmentId;
         string                                  apiKey;
         string                                  host;
-        bool                                    autoconfirmStreamUpdates = true;   // affects threading semantics - see IVIClientManager for explanation
 
-        static IVIConfiguration                 DefaultConfiguration(
+        // IVIClientManagerAsync connection management settings
+        uint32_t                                defaultTimeoutSecs;         // Amount of time to block on message-receive polling
+        uint32_t                                errorTimeoutSecs;           // Amount of time to block on each message-receive polling when in auto-recovery
+        uint32_t                                errorLoopMax;               // Number of times to poll message-receive when in auto-recovery, keep at >= 2
+        bool                                    autoconfirmStreamUpdates;   // Affects threading semantics - see IVIClientManager for explanation
+
+        static constexpr const char* DefaultHost() { return "sdk-api.iviengine.com:443"; }
+
+        static IVIConfigurationPtr              DefaultConfiguration(
                                                     const string& environmentId, 
-                                                    const string& apiKey);
-        static constexpr const char*            DefaultHost();
+                                                    const string& apiKey,
+                                                    const string& host = DefaultHost());
     };
 
     struct IVI_SDK_API IVIConnection
@@ -35,7 +42,8 @@ namespace ivi
                                                     const IVIConfiguration& configuration);
         static IVIConnectionPtr                 DefaultConnection(
                                                     const IVIConfiguration& configuration,
-                                                    const grpc::ChannelArguments& args);
+                                                    const grpc::ChannelArguments& args,
+                                                    int32_t connectionTimeoutSecs = 10);
     };
 }
 

@@ -74,6 +74,8 @@ int main(int argc, char* argv[])
     if (iviHost == nullptr)
         iviHost = "sdk-api.dev.iviengine.com:443";
 
+    IVI_CHECK(IVIConfiguration::DefaultHost() != iviHost);  // don't let somebody run the example against a live server
+
     auto lastStreamCallback(std::chrono::system_clock::now());
 
     std::vector<std::string> playerIds;
@@ -81,59 +83,34 @@ int main(int argc, char* argv[])
     std::vector<std::string> itemIds;
 
     // Set up all our Stream "executor" callbacks (see ivi-executors.h)
-    auto itemUpdated = [&](
-        const ivi::string& gameInventoryId,
-        const ivi::string& itemTypeId,
-        const ivi::string& playerId,
-        ivi::int64_t dGoodsId,
-        ivi::int32_t serialNumber,
-        const ivi::string& metadataUri,
-        const ivi::string& trackingId,
-        ivi::proto::common::item::ItemState itemState)
+    auto itemUpdated = [&](const IVIItemStatusUpdate& update)
     {
-        IVI_LOG_INFO("OnItemUpdated: gameInventoryId=", gameInventoryId, " state=", itemState, " trackingId=", trackingId);
+        IVI_LOG_INFO("OnItemUpdated: gameInventoryId=", update.gameInventoryId, " state=", ECast(update.itemState), " trackingId=", update.trackingId);
         lastStreamCallback = std::chrono::system_clock::now();
-        itemIds.push_back(gameInventoryId);
+        itemIds.push_back(update.gameInventoryId);
     };
 
-    auto itemTypeUpdated = [&](
-        const ivi::string& gameItemTypeId,
-        ivi::int32_t currentSupply,
-        ivi::int32_t issuedSupply,
-        const ivi::string& baseUri,
-        ivi::int32_t issueTimespan,
-        const ivi::string trackingId,
-        ivi::ItemTypeState::ItemTypeState itemState)
+    auto itemTypeUpdated = [&](const IVIItemTypeStatusUpdate& update)
     {
-        IVI_LOG_INFO("OnItemTypeUpdated: gameItemTypeId=", gameItemTypeId, " itemState=", itemState, " trackingId=", trackingId);
+        IVI_LOG_INFO("OnItemTypeUpdated: gameItemTypeId=", update.gameItemTypeId, " itemState=", ECast(update.itemTypeState), " trackingId=", update.trackingId);
         lastStreamCallback = std::chrono::system_clock::now();
-        itemTypeIds.push_back(gameItemTypeId);
+        itemTypeIds.push_back(update.gameItemTypeId);
     };
 
-    auto orderUpdated = [&lastStreamCallback](
-        const string& orderId,
-        OrderState::OrderState orderState)
+    auto orderUpdated = [&lastStreamCallback](const IVIOrderStatusUpdate& update)
     {
-        IVI_LOG_INFO("OnOrderUpdated: orderId=", orderId, " orderState=", orderState);
+        IVI_LOG_INFO("OnOrderUpdated: orderId=", update.orderId, " orderState=", ECast(update.orderState));
         lastStreamCallback = std::chrono::system_clock::now();
     };
 
-    auto playerUpdated = [&](
-        const ivi::string& playerId,
-        const ivi::string& trackingId,
-        PlayerState::PlayerState playerState)
+    auto playerUpdated = [&](const IVIPlayerStatusUpdate& update)
     {
-        IVI_LOG_INFO("OnPlayerUpdated: playerId=", playerId, " trackingId=", trackingId, " playerState=", playerState);
+        IVI_LOG_INFO("OnPlayerUpdated: playerId=", update.playerId, " trackingId=", update.trackingId, " playerState=", ECast(update.playerState));
         lastStreamCallback = std::chrono::system_clock::now();
-        playerIds.push_back(playerId);
+        playerIds.push_back(update.playerId);
     };
 
-    IVIConfigurationPtr configuration( std::make_shared<IVIConfiguration>(IVIConfiguration
-    {
-        iviEnv,
-        iviApiKey,
-        iviHost
-    }));
+    IVIConfigurationPtr configuration(IVIConfiguration::DefaultConfiguration(iviEnv, iviApiKey, iviHost));
 
     IVIConnectionPtr conn(IVIConnection::DefaultConnection(*configuration));
 
@@ -148,7 +125,9 @@ int main(int argc, char* argv[])
                             conn,
                             callbacks);
 
-    IVIClientManagerSync clientMgrSync(configuration, conn);
+    IVIClientManagerSync clientMgrSync(
+                            configuration, 
+                            conn);
 
     IVI_LOG_INFO("Sending some sync calls with garbage data that should fail...");
     {
@@ -182,7 +161,7 @@ int main(int argc, char* argv[])
             MakeRandomString(4) + "@iviengine.com",
             "Player " + std::to_string(i),
             "127.0.0.1",
-            [&](const IVIResultPlayerUpdate& update)
+            [&](const IVIResultPlayerStateChange& update)
             {
                 IVI_CHECK(update.Success());
                 if(update.Success())
@@ -206,7 +185,7 @@ int main(int argc, char* argv[])
         true,
         UUIDList(),
         IVIMetadata(),
-        [&](const IVIResultItemTypeStateUpdate& update)
+        [&](const IVIResultItemTypeStateChange& update)
         {
             IVI_CHECK(update.Success());
             if (update.Success())
@@ -232,7 +211,7 @@ int main(int argc, char* argv[])
     IVI_LOG_INFO("Synchronously creating 1 item; this can be slow - see log timestamps");
         for (int i = 0; i < totalSync; ++i)
     {
-        IVIResultItemStateUpdate issueResult = clientMgrSync.ItemClient().IssueItem(
+        IVIResultItemStateChange issueResult = clientMgrSync.ItemClient().IssueItem(
             MakeRandomString(8),
             playerIds[0],
             "First Item " + MakeRandomString(2),
@@ -248,7 +227,7 @@ int main(int argc, char* argv[])
         {
             ++numSuccesses;
             const auto& payload(issueResult.Payload());
-            IVI_LOG_INFO("IssueItem: gameInventoryId=", payload.gameInventoryId, " state=", payload.itemState, " trackingId=", payload.trackingId);
+            IVI_LOG_INFO("IssueItem: gameInventoryId=", payload.gameInventoryId, " state=", ECast(payload.itemState), " trackingId=", payload.trackingId);
         }
         else
         {
@@ -260,12 +239,12 @@ int main(int argc, char* argv[])
 
     for (int i = 0; i < totalAsync; ++i)
     {
-        auto issueItemCallback = [&](const IVIResultItemStateUpdate& issueResult)
+        auto issueItemCallback = [&](const IVIResultItemStateChange& issueResult)
         {
             if (issueResult.Success())
             {
                 const auto& payload(issueResult.Payload());
-                IVI_LOG_INFO("IssueItem (async): gameInventoryId=", payload.gameInventoryId, " state=", payload.itemState, " trackingId=", payload.trackingId);
+                IVI_LOG_INFO("IssueItem (async): gameInventoryId=", payload.gameInventoryId, " state=", ECast(payload.itemState), " trackingId=", payload.trackingId);
                 ++numSuccesses;
             }
             else
@@ -306,7 +285,7 @@ int main(int argc, char* argv[])
         std::string id(itemIds[i]);
         clientMgr.ItemClient().BurnItem(
             id,
-            [id](const IVIResultItemStateUpdate& update)
+            [id](const IVIResultItemStateChange& update)
             {
                 if (update.Success())
                 {

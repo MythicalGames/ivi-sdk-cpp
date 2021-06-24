@@ -17,6 +17,10 @@
 #include "ivi/generated/common/common.pb.h"
 #include "ivi/generated/common/item/definition.pb.h"
 #include "ivi/generated/common/order/definition.pb.h"
+#include "ivi/generated/streams/item/stream.pb.h"
+#include "ivi/generated/streams/itemtype/stream.pb.h"
+#include "ivi/generated/streams/order/stream.pb.h"
+#include "ivi/generated/streams/player/stream.pb.h"
 
 namespace ivi
 {
@@ -42,7 +46,7 @@ google::protobuf::Struct JsonStringToGoogleStruct(const string& jsonString)
     return protoStruct;
 }
 
-IVIMetadata IVIMetadata::fromProto(const proto::common::Metadata& metadata)
+IVIMetadata IVIMetadata::FromProto(const proto::common::Metadata& metadata)
 {
     return
     {
@@ -53,7 +57,7 @@ IVIMetadata IVIMetadata::fromProto(const proto::common::Metadata& metadata)
     };
 }
 
-proto::common::Metadata IVIMetadata::toProto() const
+proto::common::Metadata IVIMetadata::ToProto() const
 {
     proto::common::Metadata retVal;
     retVal.set_name(name);
@@ -66,15 +70,15 @@ proto::common::Metadata IVIMetadata::toProto() const
     return retVal;
 }
 
-proto::api::item::UpdateItemMetadata IVIMetadataUpdate::toProto() const
+proto::api::item::UpdateItemMetadata IVIMetadataUpdate::ToProto() const
 {
     proto::api::item::UpdateItemMetadata retVal;
     retVal.set_game_inventory_id(gameInventoryId);
-    *retVal.mutable_metadata() = metadata.toProto();
+    *retVal.mutable_metadata() = metadata.ToProto();
     return retVal;
 }
 
-IVIItem IVIItem::fromProto(const proto::api::item::Item& item)
+IVIItem IVIItem::FromProto(const proto::api::item::Item& item)
 {
     return
     {
@@ -88,14 +92,34 @@ IVIItem IVIItem::fromProto(const proto::api::item::Item& item)
         ,item.currency_base()
         ,item.metadata_uri()
         ,item.tracking_id()
-        ,IVIMetadata::fromProto(item.metadata())
-        ,item.item_state()
+        ,IVIMetadata::FromProto(item.metadata())
         ,item.created_timestamp()
         ,item.updated_timestamp()
+        ,ECast(item.item_state())
     };
 }
 
-IVIItemType IVIItemType::fromProto(const proto::api::itemtype::ItemType& itemType)
+proto::api::item::Item IVIItem::ToProto() const
+{
+    proto::api::item::Item retVal;
+    retVal.set_game_inventory_id(gameInventoryId);
+    retVal.set_game_item_type_id(gameItemTypeId);
+    retVal.set_dgoods_id(dgoodsId);
+    retVal.set_item_name(itemName);
+    retVal.set_player_id(playerId);
+    retVal.set_owner_sidechain_account(ownerSidechainAccount);
+    retVal.set_serial_number(serialNumber);
+    retVal.set_currency_base(currencyBase);
+    retVal.set_metadata_uri(metadataUri);
+    retVal.set_tracking_id(trackingId);
+    *retVal.mutable_metadata() = metadata.ToProto();
+    retVal.set_created_timestamp(createdTimestamp);
+    retVal.set_updated_timestamp(updatedTimestamp);
+    retVal.set_item_state(ECast(itemState));
+    return retVal;
+}
+
+IVIItemType IVIItemType::FromProto(const proto::api::itemtype::ItemType& itemType)
 {
     return
     {
@@ -110,10 +134,10 @@ IVIItemType IVIItemType::fromProto(const proto::api::itemtype::ItemType& itemTyp
         ,itemType.base_uri()
         ,{ itemType.agreement_ids().begin(), itemType.agreement_ids().end() }
         ,itemType.tracking_id()
-        ,IVIMetadata::fromProto(itemType.metadata())
+        ,IVIMetadata::FromProto(itemType.metadata())
         ,itemType.created_timestamp()
         ,itemType.updated_timestamp()
-        ,itemType.item_type_state()
+        ,ECast(itemType.item_type_state())
         ,itemType.fungible()
         ,itemType.burnable()
         ,itemType.transferable()
@@ -122,7 +146,33 @@ IVIItemType IVIItemType::fromProto(const proto::api::itemtype::ItemType& itemTyp
     };
 }
 
-IVIOrderAddress IVIOrderAddress::fromProto(const proto::api::order::Address& address)
+proto::api::itemtype::ItemType IVIItemType::ToProto() const
+{
+    proto::api::itemtype::ItemType itemType;
+    itemType.set_game_item_type_id(gameItemTypeId);
+    itemType.set_max_supply(maxSupply);
+    itemType.set_current_supply(currentSupply);
+    itemType.set_issued_supply(issuedSupply);
+    itemType.set_issuer(issuer);
+    itemType.set_issue_time_span(issueTimeSpan);
+    itemType.set_category(category);
+    itemType.set_token_name(tokenName);
+    itemType.set_base_uri(baseUri);
+    *itemType.mutable_agreement_ids() = { agreementIds.begin(), agreementIds.end() };
+    itemType.set_tracking_id(trackingId);
+    *itemType.mutable_metadata() = metadata.ToProto();
+    itemType.set_created_timestamp(createdTimestamp);
+    itemType.set_updated_timestamp(updatedTimestamp);
+    itemType.set_item_type_state(ECast(itemTypeState));
+    itemType.set_fungible(fungible);
+    itemType.set_burnable(burnable);
+    itemType.set_transferable(transferable);
+    itemType.set_finalized(finalized);
+    itemType.set_sellable(sellable);
+    return itemType;
+}
+
+IVIOrderAddress IVIOrderAddress::FromProto(const proto::api::order::Address& address)
 {
     return
     {
@@ -138,7 +188,7 @@ IVIOrderAddress IVIOrderAddress::fromProto(const proto::api::order::Address& add
     };
 }
 
-proto::api::order::Address IVIOrderAddress::toProto() const
+proto::api::order::Address IVIOrderAddress::ToProto() const
 {
     proto::api::order::Address retVal;
     retVal.set_first_name(firstName);
@@ -153,7 +203,7 @@ proto::api::order::Address IVIOrderAddress::toProto() const
     return retVal;
 }
 
-IVIPurchasedItems IVIPurchasedItems::fromProto(const proto::api::order::ItemTypeOrder& purchasedItems)
+IVIPurchasedItems IVIPurchasedItems::FromProto(const proto::api::order::ItemTypeOrder& purchasedItems)
 {
     return
     {
@@ -162,11 +212,11 @@ IVIPurchasedItems IVIPurchasedItems::fromProto(const proto::api::order::ItemType
         ,purchasedItems.game_item_type_id()
         ,purchasedItems.amount_paid()
         ,purchasedItems.currency()
-        ,IVIMetadata::fromProto(purchasedItems.metadata())
+        ,IVIMetadata::FromProto(purchasedItems.metadata())
     };
 }
 
-proto::api::order::ItemTypeOrder IVIPurchasedItems::toProto() const
+proto::api::order::ItemTypeOrder IVIPurchasedItems::ToProto() const
 {
     proto::api::order::ItemTypeOrder retVal;
     *retVal.mutable_game_inventory_ids() = { gameInventoryIds.begin(), gameInventoryIds.end() };
@@ -174,11 +224,11 @@ proto::api::order::ItemTypeOrder IVIPurchasedItems::toProto() const
     retVal.set_game_item_type_id(gameItemTypeId);
     retVal.set_amount_paid(amountPaid);
     retVal.set_currency(currency);
-    retVal.set_allocated_metadata(new proto::common::Metadata(metadata.toProto()));
+    retVal.set_allocated_metadata(new proto::common::Metadata(metadata.ToProto()));
     return retVal;
 }
 
-IVIOrder IVIOrder::fromProto(const proto::api::order::Order& order)
+IVIOrder IVIOrder::FromProto(const proto::api::order::Order& order)
 {
     return
     {
@@ -187,68 +237,150 @@ IVIOrder IVIOrder::fromProto(const proto::api::order::Order& order)
         ,order.buyer_player_id()
         ,order.tax()
         ,order.total()
-        ,IVIOrderAddress::fromProto(order.address())
-        ,order.listing_id()
-        ,order.payment_provider_id()
+        ,IVIOrderAddress::FromProto(order.address())
         ,order.has_metadata() ? GoogleStructToJsonString(order.metadata()) : ""
         ,order.created_by()
         ,order.request_ip()
         ,order.environment_id()
-        ,order.order_status()
         ,order.created_timestamp()
         ,order.has_payment_provider_data() && order.payment_provider_data().has_bitpay() ? 
                GoogleStructToJsonString(order.payment_provider_data().bitpay().invoice()) :
                ""
-        ,order.line_items_case() == proto::api::order::Order::kPurchasedItems
-        ,order.line_items_case() == proto::api::order::Order::kListingId
+        ,ECast(order.payment_provider_id())
+        ,ECast(order.order_status())
     };
 }
 
-IVIFinalizeOrderResponse IVIFinalizeOrderResponse::fromProto(const proto::api::order::FinalizeOrderAsyncResponse& response)
+proto::api::order::Order IVIOrder::ToProto() const
+{
+    proto::api::order::Order retVal;
+    retVal.set_order_id(orderId);
+    retVal.set_store_id(storeId);
+    retVal.set_buyer_player_id(buyerPlayerId);
+    retVal.set_tax(tax);
+    retVal.set_total(total);
+    *retVal.mutable_address() = address.ToProto();
+    retVal.set_payment_provider_id(ECast(paymentProviderId));
+    if (metadata.size() > 0)
+        *retVal.mutable_metadata() = JsonStringToGoogleStruct(metadata);
+    retVal.set_created_by(createdBy);
+    retVal.set_request_ip(requestIp);
+    retVal.set_environment_id(environmentId);
+    retVal.set_order_status(ECast(orderStatus));
+    retVal.set_created_timestamp(createdTimestamp);
+    if (bitpayInvoice.size() > 0)
+        *retVal.mutable_payment_provider_data()->mutable_bitpay()->mutable_invoice() = JsonStringToGoogleStruct(bitpayInvoice);
+    return retVal;
+}
+
+IVIFinalizeOrderResponse IVIFinalizeOrderResponse::FromProto(const proto::api::order::FinalizeOrderAsyncResponse& response)
 {
     return
     {
-         response.order_status()
-        ,response.payment_instrument_type()
+         response.payment_instrument_type()
         ,response.transaction_id()
         ,response.processor_response()
         ,response.has_fraud_score() ? response.fraud_score().fraud_score() : numeric_limits<int32_t>::max()
         ,response.has_fraud_score() ? response.fraud_score().fraud_omniscore() : string()
+        ,ECast(response.order_status())
         ,response.success()
         ,response.has_fraud_score()
     };
 }
 
-IVIPlayer IVIPlayer::fromProto(const proto::api::player::IVIPlayer& player)
+IVIPlayer IVIPlayer::FromProto(const proto::api::player::IVIPlayer& player)
 {
     return
     {
-        player.player_id(),
-        player.email(),
-        player.display_name(),
-        player.sidechain_account_name(),
-        player.tracking_id(),
-        player.player_state(),
-        player.created_timestamp()
+         player.player_id()
+        ,player.email()
+        ,player.display_name()
+        ,player.sidechain_account_name()
+        ,player.tracking_id()
+        ,player.created_timestamp()
+        ,ECast(player.player_state())
     };
 }
 
-IVIToken IVIToken::fromProto(const proto::api::payment::Token& token)
+proto::api::player::IVIPlayer IVIPlayer::ToProto() const
+{
+    proto::api::player::IVIPlayer retVal;
+    retVal.set_player_id(playerId);
+    retVal.set_email(email);
+    retVal.set_display_name(displayName);
+    retVal.set_sidechain_account_name(sidechainAccountName);
+    retVal.set_tracking_id(trackingId);
+    retVal.set_player_state(ECast(playerState));
+    retVal.set_created_timestamp(createdTimestamp);
+    return retVal;
+}
+
+IVIToken IVIToken::FromProto(const proto::api::payment::Token& token)
 {
     if (!token.has_braintree())
     {
         IVI_LOG_CRITICAL("IVIToken UNSUPPORTED PAYMENT PROVIDER RECEIVED: ", token.provider_case());
+        IVI_EXIT_FAILURE();
         return
         {
-            numeric_limits<PaymentProviderId::PaymentProviderId>::max(),
-            "UNSUPPORTED"
+             "UNSUPPORTED"
+            ,ECast(proto::api::order::payment::PaymentProviderId_INT_MAX_SENTINEL_DO_NOT_USE_)
         };
     }
 
     return
     {
-        PaymentProviderId::BRAINTREE,
-        token.braintree().token()
+         token.braintree().token()
+        ,PaymentProviderId::BRAINTREE
+
+    };
+}
+
+IVIPlayerStatusUpdate IVIPlayerStatusUpdate::FromProto(const rpc::streams::player::PlayerStatusUpdate& psu)
+{
+    return
+    {
+         psu.player_id()
+        ,psu.tracking_id()
+        ,ECast(psu.player_state())
+    };
+}
+
+IVIItemStatusUpdate IVIItemStatusUpdate::FromProto(const rpc::streams::item::ItemStatusUpdate& isu)
+{
+    return
+    {
+         isu.game_inventory_id()
+        ,isu.game_item_type_id()
+        ,isu.player_id()
+        ,isu.metadata_uri()
+        ,isu.tracking_id()
+        ,isu.dgoods_id()
+        ,isu.serial_number()
+        ,ECast(isu.item_state())
+    };
+}
+
+IVIItemTypeStatusUpdate IVIItemTypeStatusUpdate::FromProto(const rpc::streams::itemtype::ItemTypeStatusUpdate& itsu)
+{
+    return
+    {
+         itsu.game_item_type_id()
+        ,itsu.base_uri()
+        ,itsu.tracking_id()
+        ,itsu.current_supply()
+        ,itsu.issued_supply()
+        ,itsu.issue_time_span()
+        ,ECast(itsu.item_type_state())
+    };
+}
+
+IVIOrderStatusUpdate IVIOrderStatusUpdate::FromProto(const rpc::streams::order::OrderStatusUpdate& osu)
+{
+    return
+    {
+         osu.order_id()
+        ,ECast(osu.order_state())
     };
 }
 

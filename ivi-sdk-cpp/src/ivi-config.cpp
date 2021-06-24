@@ -2,25 +2,24 @@
 #include "ivi/ivi-util.h"
 #include "grpcpp/grpcpp.h"
 
+#include <map>
 #include <utility>
 
 namespace ivi
 {
 
-IVIConfiguration IVIConfiguration::DefaultConfiguration(const string& environmentId, const string& apiKey)
+IVIConfigurationPtr IVIConfiguration::DefaultConfiguration(const string& environmentId, const string& apiKey, const string& host)
 {
-    return
+    return make_shared<IVIConfiguration>(IVIConfiguration
     {
          environmentId
         ,apiKey
-        ,DefaultHost()
+        ,host
+        ,0
+        ,2
+        ,10
         ,true
-    };
-}
-
-constexpr const char* IVIConfiguration::DefaultHost()
-{
-    return "sdk-api.iviengine.com:443";
+    });
 }
 
 class IVIApiKeyCredentials final
@@ -66,7 +65,8 @@ IVIConnectionPtr IVIConnection::DefaultConnection(
 
 IVIConnectionPtr IVIConnection::DefaultConnection(
     const IVIConfiguration& configuration, 
-    const grpc::ChannelArguments& args)
+    const grpc::ChannelArguments& args,
+    int32_t connectionTimeoutSecs /*= 10*/)
 {
     IVI_CHECK(configuration.apiKey.size() > 0);
     IVI_CHECK(configuration.environmentId.size() > 0);
@@ -74,7 +74,6 @@ IVIConnectionPtr IVIConnection::DefaultConnection(
 
     IVI_LOG_VERBOSE("Creating channel to: " + configuration.host);
 
-    const int32_t connectionTimeoutSecs = 10;
     ChannelPtr channel(
         grpc::CreateCustomChannel(
             configuration.host,
@@ -92,13 +91,14 @@ IVIConnectionPtr IVIConnection::DefaultConnection(
     else
     {
         IVI_LOG_CRITICAL("Failed to connect to: " + configuration.host);
+        IVI_EXIT_FAILURE();
     }
 
     return make_shared<IVIConnection>(
             IVIConnection{
                 channel,
                 make_shared<grpc::CompletionQueue>(),
-                make_shared<grpc::CompletionQueue>()
+                make_shared<grpc::CompletionQueue>(),
             });
 }
 

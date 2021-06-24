@@ -49,25 +49,57 @@ namespace ivi
         : IVIClientManager(configuration, connection)
         , m_itemClientAsync(m_configuration, m_connection)
         , m_itemTypeClientAsync(m_configuration, m_connection)
+        , m_orderClientAsync(m_configuration, m_connection)
         , m_paymentClientAsync(m_configuration, m_connection)
         , m_playerClientAsync(m_configuration, m_connection)
         , m_itemStreamClient(m_configuration, m_connection, callbacks.onItemUpdated)
         , m_itemTypeStreamClient(m_configuration, m_connection, callbacks.onItemTypeUpdated)
         , m_orderStreamClient(m_configuration, m_connection, callbacks.onOrderUpdated)
         , m_playerStreamClient(m_configuration, m_connection, callbacks.onPlayerUpdated)
-        , m_terminating(false)
     {
         IVI_LOG_FUNC_TRIVIAL();
         IVI_CHECK(&m_connection->unaryQueue != &m_connection->streamQueue); // sanity check
+        if (m_configuration->errorLoopMax < 2)
+        {
+            IVI_LOG_CRITICAL("errorLoopMax < 2, IVIClientManagerAsync autorecovery may not work correctly and memory may leak");
+        }
     }
 
     IVIClientManagerAsync::~IVIClientManagerAsync()
     {
         IVI_LOG_FUNC();
-        m_terminating = true;
-        // drain the queues
-        PollUnary(); 
-        PollStream();
+        IVI_LOG_INFO("IVIClientManager attempting graceful shutdown");
+
+        // Graceful immediate teardown is a bit ugly
+        auto drainQueue = [&](bool unary)
+        {
+            const CompletionQueuePtr& queue(unary ? m_connection->unaryQueue : m_connection->streamQueue);
+            queue->Shutdown();
+            grpc::CompletionQueue::NextStatus nextStatus;
+            do 
+            {
+                void* tag = nullptr;
+                bool ok = true;
+                nextStatus =
+                    queue->AsyncNext(&tag, &ok, gpr_timespec{ 0, 0, GPR_TIMESPAN });
+
+                if (unary && tag != nullptr)
+                {
+                    AsyncCallback* cb = static_cast<AsyncCallback*>(tag);
+                    delete cb;
+                }
+            } while (nextStatus == grpc::CompletionQueue::GOT_EVENT);
+
+            if (nextStatus != grpc::CompletionQueue::SHUTDOWN)
+            {
+                IVI_LOG_CRITICAL("IVIClientManager did not shutdown gracefully");
+            }
+        };
+
+        drainQueue(true);
+        FinishStream(); // Calls Finish
+        FinishStream(); // Calls TryCancel
+        drainQueue(false);
     }
 
     bool IVIClientManagerAsync::Poll()
@@ -89,13 +121,13 @@ namespace ivi
 
             if (unaryShutdown)
             {
-                IVI_LOG_WARNING("IVIClientManager reinitializing unary clients");
+                IVI_LOG_INFO("IVIClientManager reinitializing unary clients");
                 ReinitializeUnary();
             }
 
             if (streamShutdown)
             {
-                IVI_LOG_WARNING("IVIClientManager reinitializing stream clients");
+                IVI_LOG_INFO("IVIClientManager reinitializing stream clients");
                 ReinitializeStream();
             }
         }
@@ -124,52 +156,42 @@ namespace ivi
 
         auto processQueue = [&](int32_t waitS) -> bool
         {
-            void* tag;
-            bool ok;
             bool callShutdown = false;
             do
             {
-                tag = nullptr;
-                ok = true;
+                void* tag = nullptr;
+                bool ok = true;
                 nextStatus =
                     queue->AsyncNext(&tag, &ok, gpr_timespec{ waitS, 0, GPR_TIMESPAN });
 
-                if (!ok && !callShutdown)
+                if (!ok)
                 {
-                    IVI_LOG_WARNING("IVIClientManager ", queueName, " queue got ok=false, will attempt SHUTDOWN and restart");
                     callShutdown = true;
                 }
 
                 if (nextStatus == grpc::CompletionQueue::GOT_EVENT && tag != nullptr)
                 {
                     AsyncCallback* cb = static_cast<AsyncCallback*>(tag);
-                    if (!m_terminating)
-                    {
-                        (*cb)(ok);
-                    }
+                    (*cb)(ok);
 
                     if (Unary)
                         delete cb;
                 }
             } while (nextStatus == grpc::CompletionQueue::GOT_EVENT);
 
-            if (nextStatus == grpc::CompletionQueue::NextStatus::SHUTDOWN)
-            {
-                IVI_LOG_WARNING("IVIClientManager ", queueName, " queue SHUTDOWN received, drain complete");
-            }
-
             return callShutdown;
         };
 
-        const bool callShutdown = processQueue(0);
+        const bool callShutdown = processQueue(m_configuration->defaultTimeoutSecs);
 
-        // gRPC requires cumbersome, goofball, and poorly-documented semantics for 
-        // handling failed connections, otherwise it will internally assert and 
-        // abort the program
+        // gRPC has poorly-documented semantics for handling failed connections, 
+        // Not making the right calls in the right order can cause an internal assert and abort the program
         if (callShutdown)
         {
-            const int32_t timeout = 2;
-            const int32_t maxShutdownPolls = 10;    // don't wait forever
+            IVI_LOG_WARNING("IVIClientManager ", queueName, " queue got ok=false, will attempt SHUTDOWN and restart");
+
+            const uint32_t timeout = m_configuration->errorTimeoutSecs;
+            const uint32_t maxShutdownPolls = m_configuration->errorLoopMax;
 
             /* "there are no more messages to be received from the server 
              *  (this can be known implicitly by the calling code, or explicitly 
@@ -178,7 +200,7 @@ namespace ivi
             */
             if (!Unary)
             {
-                IVI_LOG_WARNING("IVIClientManager ", queueName, " queue issuing Finish/Cancel");
+                IVI_LOG_INFO("IVIClientManager ", queueName, " queue issuing Finish/Cancel");
                 FinishStream();
             }
 
@@ -191,18 +213,18 @@ namespace ivi
              *  once the queue has been drained) can an instance of this class be destroyed. 
              *  Also note that applications must ensure that no work is enqueued on this completion 
              *  queue after this method is called." */
-            IVI_LOG_WARNING("IVIClientManager ", queueName, " issuing shutdown");
+            IVI_LOG_INFO("IVIClientManager ", queueName, " issuing shutdown");
             queue->Shutdown();
 
-            int32_t pollCount = 0;
-            while (nextStatus != grpc::CompletionQueue::SHUTDOWN && pollCount < maxShutdownPolls)
+            uint32_t pollCount = 0;
+            while ((nextStatus != grpc::CompletionQueue::SHUTDOWN || !IsStreamFinished()) && pollCount < maxShutdownPolls)
             {
-                IVI_LOG_WARNING("IVIClientManager ", queueName, " post-shutdown draining...");
+                IVI_LOG_INFO("IVIClientManager ", queueName, " post-shutdown draining...");
                 processQueue(timeout);
 
                 if (!Unary && ++pollCount == maxShutdownPolls / 2)
                 {
-                    IVI_LOG_WARNING("IVIClientManager ", queueName, " queue issuing Finish/Cancel AGAIN");
+                    IVI_LOG_INFO("IVIClientManager ", queueName, " queue issuing Finish/Cancel AGAIN");
                     FinishStream();
                 }
             }
@@ -211,8 +233,10 @@ namespace ivi
             {
                 IVI_LOG_CRITICAL("IVIClientManager ", queueName, " SHUTDOWN did NOT complete gracefully, possible memory leak");
             }
-
-            IVI_CHECK(IsStreamFinished());
+            else
+            {
+                IVI_LOG_INFO("IVIClientManager ", queueName, " SHUTDOWN completed gracefully, clients Finished and queue drained");
+            }
         }
 
         return callShutdown;
@@ -277,6 +301,11 @@ namespace ivi
         return m_itemTypeClientAsync;
     }
 
+    IVIOrderClientAsync& IVIClientManagerAsync::OrderClient()
+    {
+        return m_orderClientAsync;
+    }
+
     IVIPaymentClientAsync& IVIClientManagerAsync::PaymentClient()
     {
         return m_paymentClientAsync;
@@ -332,6 +361,7 @@ namespace ivi
         : IVIClientManager(configuration, connection)
         , m_itemClient(m_configuration, m_connection)
         , m_itemTypeClient(m_configuration, m_connection)
+        , m_orderClient(m_configuration, m_connection)
         , m_paymentClient(m_configuration, m_connection)
         , m_playerClient(m_configuration, m_connection)
     {
@@ -345,6 +375,11 @@ namespace ivi
     IVIItemTypeClient& IVIClientManagerSync::ItemTypeClient()
     {
         return m_itemTypeClient;
+    }
+
+    IVIOrderClient& IVIClientManagerSync::OrderClient()
+    {
+        return m_orderClient;
     }
 
     IVIPaymentClient& IVIClientManagerSync::PaymentClient()

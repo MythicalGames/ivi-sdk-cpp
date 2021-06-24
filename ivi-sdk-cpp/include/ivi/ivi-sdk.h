@@ -1,7 +1,7 @@
 #ifndef __IVI_SDK_H__
 #define __IVI_SDK_H__
 
-#define IVI_SDK_API_VERSION 1   // should match IVISDKAPIVersion() call below
+#define IVI_SDK_API_VERSION 2   // should match IVISDKAPIVersion() call below
 
 #if !defined(IVI_SDK_NOEXPORT)
     #if defined(_MSC_VER)

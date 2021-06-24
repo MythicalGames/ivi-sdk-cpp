@@ -10,7 +10,5 @@ set(ivi_sdk_example_src
 
 add_executable(ivi-sdk-example ${ivi_sdk_example_src})
 
-target_link_libraries( ivi-sdk-example 
-	PUBLIC ivi-sdk-cpp )
-
-
+target_link_libraries(ivi-sdk-example 
+	PRIVATE ivi-sdk-cpp)

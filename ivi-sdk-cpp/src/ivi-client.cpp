@@ -38,7 +38,7 @@ namespace ivi
         {
             // stoi will throw an exception and may abort the program.  
             // We want that if something has gone so wrong that HTTP codes are being sent as non-integers.
-            value = std::stoi(httpCodeKey->second.data());
+            value = stoi(httpCodeKey->second.data());
             return true;
         }
         return false;
@@ -187,10 +187,10 @@ namespace ivi
         const grpc::ClientContext& context, 
         const grpc::Status& status)
     {
-#if IVI_LOGGING_LEVEL >= 2
+#if IVI_LOGGING_LEVEL >= 3
         int httpCode = 0;
         TryGetHttpCode(context, httpCode);
-        IVI_LOG_WARNING(ServiceT::service_full_name(), message,
+        IVI_LOG_RPC_FAIL(ServiceT::service_full_name(), message,
             ": gRPCStatus=", status.error_code(),
             " HttpCode=", httpCode,
             " message=", status.error_message());
@@ -198,7 +198,7 @@ namespace ivi
     }
 
     template<typename TResult, typename TResponseParser, typename TResponse,
-    class = typename std::enable_if<!std::is_same<TResult,IVIResult>::value, TResult>::type>
+    class = typename enable_if<!is_same<TResult,IVIResult>::value, TResult>::type>
     static TResult MakeSuccessResult(TResponseParser&& parser, const TResponse& response)
     {
         return { IVIResultStatus::SUCCESS,
@@ -206,7 +206,7 @@ namespace ivi
     }
 
     template<typename TResult, typename TResponseParser, typename TResponse,
-    class = typename std::enable_if<std::is_same<TResult, IVIResult>::value, TResult>::type>
+    class = typename enable_if<is_same<TResult, IVIResult>::value, TResult>::type>
     static IVIResult MakeSuccessResult(TResponseParser&& /*parser*/, const TResponse& /*response*/)
     {
         return { IVIResultStatus::SUCCESS };
@@ -260,6 +260,7 @@ namespace ivi
         TResponseCallback&& callback)
     {
         IVI_LOG_NTRACE(ServiceT::service_full_name(), " Request: ", request.DebugString());
+		IVI_CHECK(callback);
         request.set_environment_id(GetConfig().environmentId);
 
         struct AsyncState
@@ -421,7 +422,6 @@ namespace ivi
     template<typename TStreamClientTraits>
     template<
         typename TSubscriber,
-        typename TResponseHandler,
         typename TConfirmer
     >
     IVIStreamClientT<TStreamClientTraits>::IVIStreamClientT(
@@ -429,17 +429,24 @@ namespace ivi
         const IVIConnectionPtr& conn,
         const CallbackT& callback,
         TSubscriber&& subscribe,
-        TResponseHandler&& onResponse,
         TConfirmer&& sendConfirm)
         : Base::IVIClientT(configuration, conn)
         , m_callback(callback)
-        , m_streamAdapter([this, onResponse, sendConfirm](bool ok)
+        , m_streamAdapter([this, sendConfirm](bool ok)
             {
-                ProcessNext(onResponse, sendConfirm, ok);
+                ProcessNext(sendConfirm, ok);
             })
         , m_state(new StreamState())
     {
-        Subscribe(subscribe);
+        if (callback)
+        {
+            Subscribe(subscribe);
+        }
+        else
+        {
+            IVI_LOG_RPC_FAIL(ServiceT::service_full_name(), " not subscribed because no callback was associated");
+            m_state->finishResponded = true;
+        }
     }
 
     template<typename TStreamClientTraits>
@@ -495,7 +502,7 @@ namespace ivi
         m_state->updateReader =
             (Base::template Stub<typename ServiceT::Stub>()->*subscribe)(
                 &m_state->clientContext,
-                subscribeRequest,
+                move(subscribeRequest),
                 Base::Connection()->streamQueue.get(),
                 &m_state->startCallback);
         m_state->updateReader->ReadInitialMetadata(&m_state->initMetadataCallback);
@@ -512,15 +519,8 @@ namespace ivi
         TConfirmRequestCreator&& requestCreator, 
         TConfirmRequestFunc&& confirmRequestFunc)
     {
-        // Context cannot be shared and must live until response is received
-        // This one captured in AsyncCallback lambda below which is on the heap 
-        // and deleted by whomever is polling
-        shared_ptr<grpc::ClientContext> context(make_shared<grpc::ClientContext>());
-        auto request(requestCreator());
-        request.set_environment_id(Base::GetConfig().environmentId);
-
         Base::template CallUnaryAsync<IVIResult, google::protobuf::Empty>(
-            move(request),
+            requestCreator(),
             confirmRequestFunc,
             nullptr,
             [](const IVIResult& result)
@@ -543,10 +543,9 @@ namespace ivi
     }
 
     template<typename TStreamClientTraits>
-    template<typename... Args>
-    void IVIStreamClientT<TStreamClientTraits>::OnCallback(Args&&... args)
+    void IVIStreamClientT<TStreamClientTraits>::OnCallback(const ParsedMessageT& message)
     {
-        m_callback(forward<Args>(args)...);
+        m_callback(message);
     }
 
     template<typename TStreamClientTraits>
@@ -559,11 +558,9 @@ namespace ivi
 
     template<typename TStreamClientTraits>
     template<
-        typename TResponseHandler,
         typename TConfirmer
     >
     void IVIStreamClientT<TStreamClientTraits>::ProcessNext(
-            TResponseHandler&& onResponse,
             TConfirmer&& sendConfirm,
             bool ok)
     {
@@ -575,7 +572,7 @@ namespace ivi
 
         IVI_LOG_NTRACE(ServiceT::service_full_name(), " Received: ", CurrentMessage().DebugString());
 
-        onResponse();
+        OnCallback(ParsedMessageT::FromProto(CurrentMessage()));
 
         if (Base::GetConfig().autoconfirmStreamUpdates)
         {
@@ -613,7 +610,7 @@ namespace ivi
         request.set_game_item_type_id(gameItemTypeId);
         request.set_amount_paid(amountPaid);
         request.set_currency(currency);
-        request.set_allocated_metadata(new proto::common::Metadata(metadata.toProto()));
+        *request.mutable_metadata() = metadata.ToProto();
         request.set_store_id(storeId);
         request.set_order_id(orderId);
         request.set_request_ip(requestIp);
@@ -624,13 +621,13 @@ namespace ivi
     struct ItemStateUpdateResponseParserT
     {
         string gameInventoryId;
-        IVIItemStateUpdate operator()(const TResponse& response) const
+        IVIItemStateChange operator()(const TResponse& response) const
         {
-            return { gameInventoryId, response.tracking_id(), response.item_state() };
+            return { gameInventoryId, response.tracking_id(), ECast(response.item_state()) };
         }
     };
 
-    IVIResultItemStateUpdate IVIItemClient::IssueItem(
+    IVIResultItemStateChange IVIItemClient::IssueItem(
         const string& gameInventoryId,
         const string& playerId,
         const string& itemName,
@@ -646,7 +643,7 @@ namespace ivi
         IVI_LOG_VERBOSE("IssueItem gameInventoryId=", gameInventoryId);
 
         using Response = proto::api::item::IssueItemStartedResponse;
-        return CallUnary<IVIResultItemStateUpdate, Response>(
+        return CallUnary<IVIResultItemStateChange, Response>(
             MakeIssueItemRequest(gameInventoryId, playerId, itemName, gameItemTypeId, amountPaid, currency, metadata, storeId, orderId, requestIp),
             &ServiceT::Stub::IssueItem,
             ItemStateUpdateResponseParserT<Response>{ gameInventoryId });
@@ -663,13 +660,13 @@ namespace ivi
         const string& storeId,
         const string& orderId,
         const string& requestIp,
-        const function<void(const IVIResultItemStateUpdate&)>& callback)
+        const function<void(const IVIResultItemStateChange&)>& callback)
     {
         IVI_LOG_FUNC();
         IVI_LOG_VERBOSE("IssueItem (async) gameInventoryId=", gameInventoryId);
 
         using Response = proto::api::item::IssueItemStartedResponse;
-        CallUnaryAsync<IVIResultItemStateUpdate, Response>(
+        CallUnaryAsync<IVIResultItemStateChange, Response>(
             MakeIssueItemRequest(gameInventoryId, playerId, itemName, gameItemTypeId, amountPaid, currency, metadata, storeId, orderId, requestIp),
             &ServiceT::Stub::AsyncIssueItem,
             ItemStateUpdateResponseParserT<Response>{ gameInventoryId },
@@ -690,7 +687,7 @@ namespace ivi
         return request;
     }
 
-    IVIResultItemStateUpdate IVIItemClient::TransferItem(
+    IVIResultItemStateChange IVIItemClient::TransferItem(
         const string& gameInventoryId, 
         const string& sourcePlayerId, 
         const string& destPlayerId, 
@@ -700,7 +697,7 @@ namespace ivi
         IVI_LOG_VERBOSE("TransferItem gameInventoryId=", gameInventoryId);
 
         using Response = proto::api::item::TransferItemStartedResponse;
-        return CallUnary<IVIResultItemStateUpdate, Response>(
+        return CallUnary<IVIResultItemStateChange, Response>(
             MakeTransferItemRequest(gameInventoryId, sourcePlayerId, destPlayerId, storeId),
             &ServiceT::Stub::TransferItem, 
             ItemStateUpdateResponseParserT<Response>{ gameInventoryId });
@@ -711,13 +708,13 @@ namespace ivi
         const string& sourcePlayerId,
         const string& destPlayerId,
         const string& storeId,
-        const function<void(const IVIResultItemStateUpdate&)>& callback)
+        const function<void(const IVIResultItemStateChange&)>& callback)
     {
         IVI_LOG_FUNC();
         IVI_LOG_VERBOSE("TransferItem (async) gameInventoryId=", gameInventoryId);
 
         using Response = proto::api::item::TransferItemStartedResponse;
-        CallUnaryAsync<IVIResultItemStateUpdate, Response>(
+        CallUnaryAsync<IVIResultItemStateChange, Response>(
             MakeTransferItemRequest(gameInventoryId, sourcePlayerId, destPlayerId, storeId),
             &ServiceT::Stub::AsyncTransferItem,
             ItemStateUpdateResponseParserT<Response>{ gameInventoryId },
@@ -732,14 +729,14 @@ namespace ivi
         return request;
     }
 
-    IVIResultItemStateUpdate IVIItemClient::BurnItem(
+    IVIResultItemStateChange IVIItemClient::BurnItem(
         const string& gameInventoryId)
     {
         IVI_LOG_FUNC();
         IVI_LOG_VERBOSE("BurnItem gameInventoryId=", gameInventoryId);
 
         using Response = proto::api::item::BurnItemStartedResponse;
-        return CallUnary<IVIResultItemStateUpdate, Response>(
+        return CallUnary<IVIResultItemStateChange, Response>(
             MakeBurnItemRequest(gameInventoryId),
             &ServiceT::Stub::BurnItem,
             ItemStateUpdateResponseParserT<Response>{ gameInventoryId });
@@ -747,13 +744,13 @@ namespace ivi
 
     void IVIItemClientAsync::BurnItem(
         const string& gameInventoryId,
-        const function<void(const IVIResultItemStateUpdate&)>& callback)
+        const function<void(const IVIResultItemStateChange&)>& callback)
     {
         IVI_LOG_FUNC();
         IVI_LOG_VERBOSE("BurnItem (async) gameInventoryId=", gameInventoryId);
 
         using Response = proto::api::item::BurnItemStartedResponse;
-        CallUnaryAsync<IVIResultItemStateUpdate, Response>(
+        CallUnaryAsync<IVIResultItemStateChange, Response>(
             MakeBurnItemRequest(gameInventoryId),
             &ServiceT::Stub::AsyncBurnItem,
             ItemStateUpdateResponseParserT<Response>{ gameInventoryId },
@@ -781,7 +778,7 @@ namespace ivi
         return CallUnary<IVIResultItem, Response>(
             MakeGetItemRequest(gameInventoryId, history),
             &ServiceT::Stub::GetItem,
-            &IVIItem::fromProto);
+            &IVIItem::FromProto);
     }
 
     void IVIItemClientAsync::GetItem(
@@ -803,36 +800,36 @@ namespace ivi
         CallUnaryAsync<IVIResultItem, Response>(
             MakeGetItemRequest(gameInventoryId, history),
             &ServiceT::Stub::AsyncGetItem,
-            &IVIItem::fromProto, 
+            &IVIItem::FromProto, 
             callback);
     }
 
     static proto::api::item::GetItemsRequest MakeGetItemsRequest(
         time_t createdTimestamp,
         int32_t pageSize,
-        SortOrder::SortOrder sortOrder,
-        Finalized::Finalized finalized)
+        SortOrder sortOrder,
+        Finalized finalized)
     {
         proto::api::item::GetItemsRequest request;
         request.set_created_timestamp(createdTimestamp);
         request.set_page_size(pageSize);
-        request.set_sort_order(sortOrder);
-        request.set_finalized(finalized);
+        request.set_sort_order(ECast(sortOrder));
+        request.set_finalized(ECast(finalized));
         return request;
     }
 
     static IVIResultItemList::PayloadT ParseItems(const proto::api::item::Items& response)
     {
         list<IVIItem> outItems;
-        transform(response.items().begin(), response.items().end(), outItems.begin(), &IVIItem::fromProto);
+        transform(response.items().begin(), response.items().end(), back_inserter(outItems), &IVIItem::FromProto);
         return outItems;
     }
 
     IVIResultItemList IVIItemClient::GetItems(
         time_t createdTimestamp, 
         int32_t pageSize, 
-        SortOrder::SortOrder sortOrder, 
-        Finalized::Finalized finalized)
+        SortOrder sortOrder, 
+        Finalized finalized)
     {
         IVI_LOG_FUNC();
         IVI_LOG_VERBOSE("GetItems pageSize=", pageSize);
@@ -847,8 +844,8 @@ namespace ivi
     void IVIItemClientAsync::GetItems(
         time_t createdTimestamp,
         int32_t pageSize,
-        SortOrder::SortOrder sortOrder,
-        Finalized::Finalized finalized,
+        SortOrder sortOrder,
+        Finalized finalized,
         const function<void(const IVIResultItemList&)>& callback)
     {
         IVI_LOG_FUNC();
@@ -862,24 +859,31 @@ namespace ivi
             callback);
     }
 
-    IVIResult IVIItemClient::UpdateItemMetadata(
-        const string& gameInventoryId, 
+    proto::api::item::UpdateItemMetadataRequest MakeUpdateItemMetadataRequest(
+        const string& gameInventoryId,
         const IVIMetadata& metadata)
     {
         proto::api::item::UpdateItemMetadataRequest request;
         auto protoMetadata(request.add_update_items());
         protoMetadata->set_game_inventory_id(gameInventoryId);
-        *protoMetadata->mutable_metadata() = metadata.toProto();
+        *protoMetadata->mutable_metadata() = metadata.ToProto();
+        return request;
+    }
 
-        return UpdateItemMetadata(move(request));
+    IVIResult IVIItemClient::UpdateItemMetadata(
+        const string& gameInventoryId, 
+        const IVIMetadata& metadata)
+    {
+
+        return UpdateItemMetadata(MakeUpdateItemMetadataRequest(gameInventoryId, metadata));
     }
 
     proto::api::item::UpdateItemMetadataRequest MakeUpdateItemMetadataRequest(const IVIMetadataUpdateList& updates)
     {
         proto::api::item::UpdateItemMetadataRequest request;
         request.mutable_update_items()->Reserve(static_cast<int>(updates.size()));
-        transform(updates.begin(), updates.end(), request.mutable_update_items()->begin(),
-            [](const IVIMetadataUpdate& update) { return update.toProto();  });
+        transform(updates.begin(), updates.end(), google::protobuf::RepeatedPtrFieldBackInserter(request.mutable_update_items()),
+            [](const IVIMetadataUpdate& update) { return update.ToProto();  });
         return request;
     }
 
@@ -894,12 +898,7 @@ namespace ivi
         const IVIMetadata& metadata,
         const function<void(const IVIResult&)>& callback)
     {
-        proto::api::item::UpdateItemMetadataRequest request;
-        auto protoMetadata(request.add_update_items());
-        protoMetadata->set_game_inventory_id(gameInventoryId);
-        *protoMetadata->mutable_metadata() = metadata.toProto();
-
-        UpdateItemMetadata(move(request), callback);
+        UpdateItemMetadata(MakeUpdateItemMetadataRequest(gameInventoryId, metadata), callback);
     }
 
     void IVIItemClientAsync::UpdateItemMetadata(
@@ -907,14 +906,6 @@ namespace ivi
         const function<void(const IVIResult&)>& callback)
     {
         UpdateItemMetadata(MakeUpdateItemMetadataRequest(updates), callback);
-    }
-
-    static proto::api::item::UpdateItemMetadataRequest MakeUpdateItemMetadataRequest(
-        const list<proto::api::item::UpdateItemMetadata>& updateList)
-    {
-        proto::api::item::UpdateItemMetadataRequest request;
-        *request.mutable_update_items() = { updateList.begin(), updateList.end() };
-        return request;
     }
 
     IVIResult IVIItemClient::UpdateItemMetadata(
@@ -998,7 +989,7 @@ namespace ivi
     static IVIResultItemTypeList::PayloadT ParseItemTypes(const proto::api::itemtype::ItemTypes& response)
     {
         list<IVIItemType> outItems;
-        transform(response.item_types().begin(), response.item_types().end(), outItems.begin(), &IVIItemType::fromProto);
+        transform(response.item_types().begin(), response.item_types().end(), back_inserter(outItems), &IVIItemType::FromProto);
         return outItems;
     }
 
@@ -1051,22 +1042,22 @@ namespace ivi
         request.set_transferable(transferable);
         request.set_sellable(sellable);
         *request.mutable_agreement_ids() = { agreementIds.begin(), agreementIds.end() };
-        *request.mutable_metadata() = metadata.toProto();
+        *request.mutable_metadata() = metadata.ToProto();
         return request;
     }
 
     template<typename TResponse>
-    static IVIResultItemTypeStateUpdate::PayloadT ParseItemTypeStateUpdate(const TResponse& response)
+    static IVIResultItemTypeStateChange::PayloadT ParseItemTypeStateUpdate(const TResponse& response)
     {
         return
         {
             response.game_item_type_id(),
             response.tracking_id(), 
-            response.item_type_state()
+            ECast(response.item_type_state())
         };
     }
 
-    IVIResultItemTypeStateUpdate IVIItemTypeClient::CreateItemType(
+    IVIResultItemTypeStateChange IVIItemTypeClient::CreateItemType(
         const string& gameItemTypeId,
         const string& tokenName,
         const string& category,
@@ -1082,7 +1073,7 @@ namespace ivi
         IVI_LOG_VERBOSE("CreateItemType request: ", gameItemTypeId);
 
         using Response = proto::api::itemtype::CreateItemAsyncResponse;
-        return CallUnary<IVIResultItemTypeStateUpdate, Response>(
+        return CallUnary<IVIResultItemTypeStateChange, Response>(
             MakeCreateItemTypeRequest(gameItemTypeId, tokenName, category, maxSupply, issueTimeSpan, burnable, transferable, sellable, agreementIds, metadata),
             &ServiceT::Stub::CreateItemType,
             &ParseItemTypeStateUpdate<Response>);
@@ -1099,13 +1090,13 @@ namespace ivi
         bool sellable,
         const UUIDList& agreementIds,
         const IVIMetadata& metadata,
-        const function<void(const IVIResultItemTypeStateUpdate&)>& callback)
+        const function<void(const IVIResultItemTypeStateChange&)>& callback)
     {
         IVI_LOG_FUNC();
         IVI_LOG_VERBOSE("CreateItemType (async) request: ", gameItemTypeId);
 
         using Response = proto::api::itemtype::CreateItemAsyncResponse;
-        CallUnaryAsync<IVIResultItemTypeStateUpdate, Response>(
+        CallUnaryAsync<IVIResultItemTypeStateChange, Response>(
             MakeCreateItemTypeRequest(gameItemTypeId, tokenName, category, maxSupply, issueTimeSpan, burnable, transferable, sellable, agreementIds, metadata),
             &ServiceT::Stub::AsyncCreateItemType,
             &ParseItemTypeStateUpdate<Response>,
@@ -1122,25 +1113,25 @@ namespace ivi
     struct FreezeItemTypeAsyncResponseParser
     {
         string gameInventoryId;
-        IVIItemTypeStateUpdate operator()(const proto::api::itemtype::FreezeItemTypeAsyncResponse& response) const
+        IVIItemTypeStateChange operator()(const proto::api::itemtype::FreezeItemTypeAsyncResponse& response) const
         {
             return
             {
                 gameInventoryId,
                 response.tracking_id(),
-                response.item_type_state()
+                ECast(response.item_type_state())
             };
         }
     };
 
-    IVIResultItemTypeStateUpdate IVIItemTypeClient::FreezeItemType(
+    IVIResultItemTypeStateChange IVIItemTypeClient::FreezeItemType(
         const string& gameItemTypeId)
     {
         IVI_LOG_FUNC();
         IVI_LOG_VERBOSE("FreezeItemType request: ", gameItemTypeId);
 
         using Response = proto::api::itemtype::FreezeItemTypeAsyncResponse;
-        return CallUnary<IVIResultItemTypeStateUpdate, Response>(
+        return CallUnary<IVIResultItemTypeStateChange, Response>(
             MakeFreezeItemTypeRequest(gameItemTypeId),
             &ServiceT::Stub::FreezeItemType,
             FreezeItemTypeAsyncResponseParser{ gameItemTypeId });
@@ -1149,13 +1140,13 @@ namespace ivi
 
     void IVIItemTypeClientAsync::FreezeItemType(
         const string& gameItemTypeId, 
-        const function<void(const IVIResultItemTypeStateUpdate&)>& callback)
+        const function<void(const IVIResultItemTypeStateChange&)>& callback)
     {
         IVI_LOG_FUNC();
         IVI_LOG_VERBOSE("FreezeItemType (async) request: ", gameItemTypeId);
 
         using Response = proto::api::itemtype::FreezeItemTypeAsyncResponse;
-        CallUnaryAsync<IVIResultItemTypeStateUpdate, Response>(
+        CallUnaryAsync<IVIResultItemTypeStateChange, Response>(
             MakeFreezeItemTypeRequest(gameItemTypeId),
             &ServiceT::Stub::AsyncFreezeItemType,
             FreezeItemTypeAsyncResponseParser{ gameItemTypeId },
@@ -1168,7 +1159,7 @@ namespace ivi
     {
         proto::api::itemtype::UpdateItemTypeMetadataPayload request;
         request.set_game_item_type_id(gameItemTypeId);
-        *request.mutable_metadata() = metadata.toProto();
+        *request.mutable_metadata() = metadata.ToProto();
         return request;
     }
 
@@ -1228,18 +1219,18 @@ namespace ivi
     struct LinkPlayerAsyncResponseParser
     {
         string playerId;
-        IVIResultPlayerUpdate::PayloadT operator()(const proto::api::player::LinkPlayerAsyncResponse& response) const
+        IVIResultPlayerStateChange::PayloadT operator()(const proto::api::player::LinkPlayerAsyncResponse& response) const
         {
             return
             {
                 playerId,
                 response.tracking_id(),
-                response.player_state()
+                ECast(response.player_state())
             };
         }
     };
 
-    IVIResultPlayerUpdate IVIPlayerClient::LinkPlayer(
+    IVIResultPlayerStateChange IVIPlayerClient::LinkPlayer(
         const string& playerId,
         const string& email,
         const string& displayName,
@@ -1249,7 +1240,7 @@ namespace ivi
         IVI_LOG_VERBOSE("LinkPlayer request: ", playerId);
 
         using Response = proto::api::player::LinkPlayerAsyncResponse;
-        return CallUnary<IVIResultPlayerUpdate, Response>(
+        return CallUnary<IVIResultPlayerStateChange, Response>(
             MakeLinkPlayerRequest(playerId, email, displayName, requestIp),
             &ServiceT::Stub::LinkPlayer,
             LinkPlayerAsyncResponseParser{ playerId });
@@ -1260,13 +1251,13 @@ namespace ivi
         const string& email,
         const string& displayName,
         const string& requestIp,
-        const function<void(const IVIResultPlayerUpdate&)>& callback)
+        const function<void(const IVIResultPlayerStateChange&)>& callback)
     {
         IVI_LOG_FUNC();
         IVI_LOG_VERBOSE("LinkPlayer (async) request: ", playerId);
 
         using Response = proto::api::player::LinkPlayerAsyncResponse;
-        CallUnaryAsync<IVIResultPlayerUpdate, Response>(
+        CallUnaryAsync<IVIResultPlayerStateChange, Response>(
             MakeLinkPlayerRequest(playerId, email, displayName, requestIp),
             &ServiceT::Stub::AsyncLinkPlayer,
             LinkPlayerAsyncResponseParser{ playerId },
@@ -1289,7 +1280,7 @@ namespace ivi
         return CallUnary<IVIResultPlayer, Response>(
             MakeGetPlayerRequest(playerId),
             &ServiceT::Stub::GetPlayer,
-            &IVIPlayer::fromProto);
+            &IVIPlayer::FromProto);
     }
 
     void IVIPlayerClientAsync::GetPlayer(
@@ -1303,33 +1294,33 @@ namespace ivi
         CallUnaryAsync<IVIResultPlayer, Response>(
             MakeGetPlayerRequest(playerId),
             &ServiceT::Stub::AsyncGetPlayer,
-            &IVIPlayer::fromProto,
+            &IVIPlayer::FromProto,
             callback);
     }
 
     static proto::api::player::GetPlayersRequest MakeGetPlayersRequest(
         time_t createdTimestamp,
         int32_t pageSize,
-        SortOrder::SortOrder sortOrder)
+        SortOrder sortOrder)
     {
         proto::api::player::GetPlayersRequest request;
         request.set_created_timestamp(createdTimestamp);
         request.set_page_size(pageSize);
-        request.set_sort_order(sortOrder);
+        request.set_sort_order(ECast(sortOrder));
         return request;
     }
 
     static IVIResultPlayerList::PayloadT ParseIVIPlayers(const proto::api::player::IVIPlayers& response)
     {
         IVIPlayerList responseList;
-        transform(response.ivi_players().begin(), response.ivi_players().end(), responseList.begin(), &IVIPlayer::fromProto);
+        transform(response.ivi_players().begin(), response.ivi_players().end(), back_inserter(responseList), &IVIPlayer::FromProto);
         return responseList;
     }
 
     IVIResultPlayerList IVIPlayerClient::GetPlayers(
         time_t createdTimestamp,
         int32_t pageSize,
-        SortOrder::SortOrder sortOrder)
+        SortOrder sortOrder)
     {
         IVI_LOG_FUNC();
         IVI_LOG_VERBOSE("GetPlayers request: ", pageSize);
@@ -1344,7 +1335,7 @@ namespace ivi
     void IVIPlayerClientAsync::GetPlayers(
         time_t createdTimestamp,
         int32_t pageSize,
-        SortOrder::SortOrder sortOrder,
+        SortOrder sortOrder,
         const function<void(const IVIResultPlayerList&)>& callback)
     {
         IVI_LOG_FUNC();
@@ -1384,7 +1375,7 @@ namespace ivi
         return CallUnary<IVIResultOrder, Response>(
             MakeGetOrderRequest(orderId),
             &ServiceT::Stub::GetOrder,
-            &IVIOrder::fromProto);
+            &IVIOrder::FromProto);
     }
 
     void IVIOrderClientAsync::GetOrder(
@@ -1398,16 +1389,17 @@ namespace ivi
         CallUnaryAsync<IVIResultOrder, Response>(
             MakeGetOrderRequest(orderId),
             &ServiceT::Stub::AsyncGetOrder,
-            &IVIOrder::fromProto, 
+            &IVIOrder::FromProto, 
             callback);
     }
-    
+
     static proto::api::order::CreateOrderRequest MakeCreateOrderRequest(
         const string& storeId,
         const string& buyerPlayerId,
         const BigDecimal& subTotal,
         const IVIOrderAddress& address,
-        PaymentProviderId::PaymentProviderId paymentProviderId,
+        PaymentProviderId paymentProviderId,
+        const IVIPurchasedItemsList& purchasedItems,
         const string& metadata,
         const string& requestIp)
     {
@@ -1415,44 +1407,14 @@ namespace ivi
         request.set_store_id(storeId);
         request.set_buyer_player_id(buyerPlayerId);
         request.set_sub_total(subTotal);
-        *request.mutable_address() = address.toProto();
-        request.set_payment_provider_id(paymentProviderId);
-        *request.mutable_metadata() = JsonStringToGoogleStruct(metadata);
+        *request.mutable_address() = address.ToProto();
+        request.set_payment_provider_id(ECast(paymentProviderId));
+        if(metadata.size() > 0)
+            *request.mutable_metadata() = JsonStringToGoogleStruct(metadata);
         request.set_request_ip(requestIp);
-        return request;
-    }
-
-    static proto::api::order::CreateOrderRequest MakeCreateOrderRequest(
-        const string& storeId,
-        const string& buyerPlayerId,
-        const BigDecimal& subTotal,
-        const IVIOrderAddress& address,
-        PaymentProviderId::PaymentProviderId paymentProviderId,
-        const IVIPurchasedItemsList& purchasedItems,
-        const string& metadata,
-        const string& requestIp)
-    {
-        proto::api::order::CreateOrderRequest request(
-            MakeCreateOrderRequest(storeId, buyerPlayerId, subTotal, address, paymentProviderId, metadata, requestIp));
         transform(purchasedItems.begin(), purchasedItems.end(),
-            request.mutable_purchased_items()->mutable_purchased_items()->begin(),
-            [](const IVIPurchasedItems& item) { return item.toProto(); });
-        return request;
-    }
-
-    static proto::api::order::CreateOrderRequest MakeCreateOrderRequest(
-        const string& storeId,
-        const string& buyerPlayerId,
-        const BigDecimal& subTotal,
-        const IVIOrderAddress& address,
-        PaymentProviderId::PaymentProviderId paymentProviderId,
-        const string& listingId,
-        const string& metadata,
-        const string& requestIp)
-    {
-        proto::api::order::CreateOrderRequest request(
-            MakeCreateOrderRequest(storeId, buyerPlayerId, subTotal, address, paymentProviderId, metadata, requestIp));
-        request.set_listing_id(listingId);
+            google::protobuf::RepeatedPtrFieldBackInserter(request.mutable_purchased_items()->mutable_purchased_items()),
+            [](const IVIPurchasedItems& item) { return item.ToProto(); });
         return request;
     }
 
@@ -1461,7 +1423,7 @@ namespace ivi
         const string& buyerPlayerId, 
         const BigDecimal& subTotal, 
         const IVIOrderAddress& address, 
-        PaymentProviderId::PaymentProviderId paymentProviderId, 
+        PaymentProviderId paymentProviderId, 
         const IVIPurchasedItemsList& purchasedItems, 
         const string& metadata, 
         const string& requestIp)
@@ -1473,7 +1435,7 @@ namespace ivi
         return CallUnary<IVIResultOrder, Response>(
             MakeCreateOrderRequest(storeId, buyerPlayerId, subTotal, address, paymentProviderId, purchasedItems, metadata, requestIp),
             &ServiceT::Stub::CreateOrder,
-            &IVIOrder::fromProto);
+            &IVIOrder::FromProto);
     }
 
     void IVIOrderClientAsync::CreatePrimaryOrder(
@@ -1481,7 +1443,7 @@ namespace ivi
         const string& buyerPlayerId,
         const BigDecimal& subTotal,
         const IVIOrderAddress& address,
-        PaymentProviderId::PaymentProviderId paymentProviderId,
+        PaymentProviderId paymentProviderId,
         const IVIPurchasedItemsList& purchasedItems,
         const string& metadata,
         const string& requestIp,
@@ -1494,49 +1456,7 @@ namespace ivi
         CallUnaryAsync<IVIResultOrder, Response>(
             MakeCreateOrderRequest(storeId, buyerPlayerId, subTotal, address, paymentProviderId, purchasedItems, metadata, requestIp),
             &ServiceT::Stub::AsyncCreateOrder,
-            &IVIOrder::fromProto,
-            callback);
-    }
-
-    IVIResultOrder IVIOrderClient::CreateSecondaryOrder(
-        const string& storeId,
-        const string& buyerPlayerId,
-        const BigDecimal& subTotal,
-        const IVIOrderAddress& address,
-        PaymentProviderId::PaymentProviderId paymentProviderId,
-        const string& listingId,
-        const string& metadata,
-        const string& requestIp)
-    {
-        IVI_LOG_FUNC();
-        IVI_LOG_VERBOSE("CreateSecondaryOrder request: ", buyerPlayerId);
-
-        using Response = proto::api::order::Order;
-        return CallUnary<IVIResultOrder, Response>(
-            MakeCreateOrderRequest(storeId, buyerPlayerId, subTotal, address, paymentProviderId, listingId, metadata, requestIp),
-            &ServiceT::Stub::CreateOrder,
-            &IVIOrder::fromProto);
-    }
-
-    void IVIOrderClientAsync::CreateSecondaryOrder(
-        const string& storeId,
-        const string& buyerPlayerId,
-        const BigDecimal& subTotal,
-        const IVIOrderAddress& address,
-        PaymentProviderId::PaymentProviderId paymentProviderId,
-        const string& listingId,
-        const string& metadata,
-        const string& requestIp,
-        const function<void(const IVIResultOrder&)> callback)
-    {
-        IVI_LOG_FUNC();
-        IVI_LOG_VERBOSE("CreateSecondaryOrder (async) request: ", buyerPlayerId);
-
-        using Response = proto::api::order::Order;
-        CallUnaryAsync<IVIResultOrder, Response>(
-            MakeCreateOrderRequest(storeId, buyerPlayerId, subTotal, address, paymentProviderId, listingId, metadata, requestIp),
-            &ServiceT::Stub::AsyncCreateOrder,
-            &IVIOrder::fromProto,
+            &IVIOrder::FromProto,
             callback);
     }
 
@@ -1604,7 +1524,7 @@ namespace ivi
         return CallUnary<IVIResultFinalizeOrderResponse, Response>(
             MakeFinalizeOrderRequest(orderId, fraudSessionId, move(paymentData)),
             &ServiceT::Stub::FinalizeOrder,
-            &IVIFinalizeOrderResponse::fromProto);
+            &IVIFinalizeOrderResponse::FromProto);
     }
 
     void IVIOrderClientAsync::FinalizeBraintreeOrder(
@@ -1644,7 +1564,7 @@ namespace ivi
         CallUnaryAsync<IVIResultFinalizeOrderResponse, Response>(
             MakeFinalizeOrderRequest(orderId, fraudSessionId, move(paymentData)),
             &ServiceT::Stub::AsyncFinalizeOrder,
-            &IVIFinalizeOrderResponse::fromProto,
+            &IVIFinalizeOrderResponse::FromProto,
             callback);
     }
 
@@ -1658,7 +1578,7 @@ namespace ivi
     template IVIClientT<IVIPaymentClient::ServiceT>::~IVIClientT();
 
     static proto::api::payment::CreateTokenRequest MakeCreateTokenRequest(
-        PaymentProviderId::PaymentProviderId id,
+        PaymentProviderId id,
         const string& playerId)
     {
         IVI_CHECK(id == PaymentProviderId::BRAINTREE);
@@ -1668,7 +1588,7 @@ namespace ivi
     }
 
     IVIResultToken IVIPaymentClient::GetToken(
-        PaymentProviderId::PaymentProviderId id,
+        PaymentProviderId id,
         const string& playerId)
     {
         IVI_LOG_FUNC();
@@ -1678,13 +1598,13 @@ namespace ivi
         return CallUnary<IVIResultToken, Response>(
             MakeCreateTokenRequest(id, playerId),
             &ServiceT::Stub::GenerateClientToken,
-            &IVIToken::fromProto);
+            &IVIToken::FromProto);
     }
 
     void IVIPaymentClientAsync::GetToken(
-        PaymentProviderId::PaymentProviderId id,
+        PaymentProviderId id,
         const string& playerId,
-        function<void(const IVIResultToken&)>& callback)
+        const function<void(const IVIResultToken&)>& callback)
     {
         IVI_LOG_FUNC();
         IVI_LOG_VERBOSE("GetToken (async) request: ", playerId);
@@ -1693,7 +1613,7 @@ namespace ivi
         CallUnaryAsync<IVIResultToken, Response>(
             MakeCreateTokenRequest(id, playerId),
             &ServiceT::Stub::AsyncGenerateClientToken,
-            &IVIToken::fromProto,
+            &IVIToken::FromProto,
             callback);
     }
 
@@ -1713,27 +1633,14 @@ namespace ivi
             configuration, 
             conn, 
             onItemUpdated,
-            &rpc::streams::item::ItemStream::Stub::AsyncItemStatusStream, // subscribe
-            [this]()    // onResponse
-            {
-                const rpc::streams::item::ItemStatusUpdate& response(CurrentMessage());
-                OnCallback(
-                    response.game_inventory_id(),
-                    response.game_item_type_id(),
-                    response.player_id(),
-                    response.dgoods_id(),
-                    response.serial_number(),
-                    response.metadata_uri(),
-                    response.tracking_id(),
-                    response.item_state());
-            },
+            &ServiceT::Stub::AsyncItemStatusStream, // subscribe
             [this]()    // sendConfirm
             {
                 const rpc::streams::item::ItemStatusUpdate& response(CurrentMessage());
                 Confirm(
                     response.game_inventory_id(),
                     response.tracking_id(),
-                    response.item_state());
+                    ECast(response.item_state()));
             })
     {
         IVI_LOG_FUNC_TRIVIAL();
@@ -1742,7 +1649,7 @@ namespace ivi
     void IVIItemStreamClient::Confirm(
         const string& gameInventoryId, 
         const string& trackingId, 
-        ItemState::ItemState itemState)
+        ItemState itemState)
     {
         IVI_LOG_FUNC();
         IVIStreamClientT::Confirm(
@@ -1751,10 +1658,10 @@ namespace ivi
                 rpc::streams::item::ItemStatusConfirmRequest request;
                 request.set_game_inventory_id(gameInventoryId);
                 request.set_tracking_id(trackingId);
-                request.set_item_state(itemState);
+                request.set_item_state(ECast(itemState));
                 return request;
             },
-            &rpc::streams::item::ItemStream::Stub::AsyncItemStatusConfirmation  // confirmRequestFunc
+            &ServiceT::Stub::AsyncItemStatusConfirmation  // confirmRequestFunc
         );
     }
 
@@ -1774,26 +1681,14 @@ namespace ivi
             configuration,
             conn,
             onItemTypeUpdated,
-            &rpc::streams::itemtype::ItemTypeStatusStream::Stub::AsyncItemTypeStatusStream, // subscribe
-            [this]()    // onResponse
-            {
-                const rpc::streams::itemtype::ItemTypeStatusUpdate& response(CurrentMessage());
-                OnCallback(
-                    response.game_item_type_id(),
-                    response.current_supply(),
-                    response.issued_supply(),
-                    response.base_uri(),
-                    response.issue_time_span(),
-                    response.tracking_id(),
-                    response.item_type_state());
-            },
+            &ServiceT::Stub::AsyncItemTypeStatusStream, // subscribe
             [this]()    // sendConfirm
             {
                 const rpc::streams::itemtype::ItemTypeStatusUpdate& response(CurrentMessage());
                 Confirm(
                     response.game_item_type_id(),
                     response.tracking_id(),
-                    response.item_type_state());
+                    ECast(response.item_type_state()));
             })
     {
         IVI_LOG_FUNC_TRIVIAL();
@@ -1802,7 +1697,7 @@ namespace ivi
     void IVIItemTypeStreamClient::Confirm(
         const string& gameItemTypeId,
         const string& trackingId,
-        ItemTypeState::ItemTypeState itemTypeState)
+        ItemTypeState itemTypeState)
     {
         IVI_LOG_FUNC();
         IVIStreamClientT::Confirm(
@@ -1811,10 +1706,10 @@ namespace ivi
                 rpc::streams::itemtype::ItemTypeStatusConfirmRequest request;
                 request.set_game_item_type_id(gameItemTypeId);
                 request.set_tracking_id(trackingId);
-                request.set_item_type_state(itemTypeState);
+                request.set_item_type_state(ECast(itemTypeState));
                 return request;
             },
-            &rpc::streams::itemtype::ItemTypeStatusStream::Stub::AsyncItemTypeStatusConfirmation  // confirmRequestFunc
+            &ServiceT::Stub::AsyncItemTypeStatusConfirmation  // confirmRequestFunc
         );
     }
 
@@ -1834,20 +1729,13 @@ namespace ivi
             configuration,
             conn,
             onOrderUpdated,
-            &rpc::streams::order::OrderStream::Stub::AsyncOrderStatusStream, // subscribe
-            [this]()    // onResponse
-            {
-                const rpc::streams::order::OrderStatusUpdate& response(CurrentMessage());
-                OnCallback(
-                    response.order_id(),
-                    response.order_state());
-            },
+            &ServiceT::Stub::AsyncOrderStatusStream, // subscribe
             [this]()    // sendConfirm
             {
                 const rpc::streams::order::OrderStatusUpdate& response(CurrentMessage());
                 Confirm(
                     response.order_id(),
-                    response.order_state());
+                    ECast(response.order_state()));
             })
     {
         IVI_LOG_FUNC_TRIVIAL();
@@ -1855,7 +1743,7 @@ namespace ivi
 
     void IVIOrderStreamClient::Confirm(
         const string& orderId,
-        OrderState::OrderState orderState)
+        OrderState orderState)
     {
         IVI_LOG_FUNC();
         IVIStreamClientT::Confirm(
@@ -1863,10 +1751,10 @@ namespace ivi
             {
                 rpc::streams::order::OrderStatusConfirmRequest request;
                 request.set_order_id(orderId);
-                request.set_order_state(orderState);
+                request.set_order_state(ECast(orderState));
                 return request;
             },
-            &rpc::streams::order::OrderStream::Stub::AsyncOrderStatusConfirmation  // confirmRequestFunc
+            &ServiceT::Stub::AsyncOrderStatusConfirmation  // confirmRequestFunc
         );
     }
 
@@ -1886,22 +1774,14 @@ namespace ivi
             configuration,
             conn,
             onOrderUpdated,
-            &rpc::streams::player::PlayerStream::Stub::AsyncPlayerStatusStream, // subscribe
-            [this]()    // onResponse
-            {
-                const rpc::streams::player::PlayerStatusUpdate& response(CurrentMessage());
-                OnCallback(
-                    response.player_id(),
-                    response.tracking_id(),
-                    response.player_state());
-            },
+            &ServiceT::Stub::AsyncPlayerStatusStream, // subscribe
             [this]()    // sendConfirm
             {
                 const rpc::streams::player::PlayerStatusUpdate& response(CurrentMessage());
                 Confirm(
                     response.player_id(),
                     response.tracking_id(),
-                    response.player_state());
+                    ECast(response.player_state()));
             })
     {
         IVI_LOG_FUNC_TRIVIAL();
@@ -1910,7 +1790,7 @@ namespace ivi
     void IVIPlayerStreamClient::Confirm(
                 const string& playerId,
                 const string& trackingId,
-                PlayerState::PlayerState playerState)
+                PlayerState playerState)
     {
         IVI_LOG_FUNC();
         IVIStreamClientT::Confirm(
@@ -1919,10 +1799,10 @@ namespace ivi
                 rpc::streams::player::PlayerStatusConfirmRequest request;
                 request.set_player_id(playerId);
                 request.set_tracking_id(trackingId);
-                request.set_player_state(playerState);
+                request.set_player_state(ECast(playerState));
                 return request;
             },
-            &rpc::streams::player::PlayerStream::Stub::AsyncPlayerStatusConfirmation  // confirmRequestFunc
+            &ServiceT::Stub::AsyncPlayerStatusConfirmation  // confirmRequestFunc
         );
     }
 }
