@@ -149,8 +149,7 @@ int main(int argc, char* argv[])
     for (int i = 0; i < 200; ++i)
     {
         clientMgr.Poll();
-        using namespace std::chrono_literals;
-        std::this_thread::sleep_for(10ms);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
     IVI_LOG_INFO("Creating some new players (async)...");
@@ -195,7 +194,6 @@ int main(int argc, char* argv[])
         });
 
     IVI_LOG_INFO("Waiting for new Players and Item Types to get streamed back to us...");
-    using namespace std::chrono_literals;
     while (playerIds.size() < 2 || itemTypeIds.empty())
     {
         if (!clientMgr.Poll())
@@ -203,7 +201,7 @@ int main(int argc, char* argv[])
             IVI_LOG_CRITICAL("Broken connection, quitting");
             return 1;
         }
-        std::this_thread::sleep_for(10ms);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
     int numFailures = 0, numSuccesses = 0;
@@ -268,14 +266,14 @@ int main(int argc, char* argv[])
     }
 
     IVI_LOG_INFO("Waiting for issued items to be confirmed by the stream...");
-    while (std::chrono::system_clock::now() - lastStreamCallback < 60s)
+    while (std::chrono::system_clock::now() - lastStreamCallback < std::chrono::seconds(60))
     {
         if (!clientMgr.Poll())
         {
             IVI_LOG_CRITICAL("Broken connection, quitting");
             return 2;
         }
-        std::this_thread::sleep_for(10ms);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
     const auto numItems = itemIds.size();
@@ -297,15 +295,14 @@ int main(int argc, char* argv[])
     lastStreamCallback = std::chrono::system_clock::now();
 
     IVI_LOG_INFO("Waiting for burned items and any other outstanding stream updates...");
-    using namespace std::chrono_literals;
-    while (std::chrono::system_clock::now() - lastStreamCallback < 120s)
+    while (std::chrono::system_clock::now() - lastStreamCallback < std::chrono::seconds(120))
     {
         if (!clientMgr.Poll())
         {
             IVI_LOG_CRITICAL("Broken connection, quitting");
             return 3;
         }
-        std::this_thread::sleep_for(10ms);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
     IVI_LOG_INFO("IssuesItems maxSupply=", maxSupply, " total=", (totalAsync + totalSync), " numSuccesses=", numSuccesses, " numFailures=", numFailures);
