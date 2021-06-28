@@ -6,7 +6,6 @@ on:
 
 jobs:
   build-with-gcc:
-    continue-on-error: true # TODO: testing only
     runs-on: mono-runner
     timeout-minutes: 25
     container:
@@ -16,6 +15,7 @@ jobs:
         password: ${{ secrets.IVISDKCPP_GITHUBACTION_TOKEN }}
 
     strategy:
+      fail-fast: false
       matrix:
         cxx_standard: [11, 14, 17]
       max-parallel: 3
@@ -40,7 +40,6 @@ jobs:
         run: ivi-sdk-cpp/tests/ivi-sdk-test
 
   build-with-clang:
-    continue-on-error: true # TODO: testing only
     runs-on: mono-runner
     timeout-minutes: 25
     container:
@@ -50,6 +49,7 @@ jobs:
         password: ${{ secrets.IVISDKCPP_GITHUBACTION_TOKEN }}
 
     strategy:
+      fail-fast: false
       matrix:
         cxx_standard: [11, 14, 17]
       max-parallel: 3
