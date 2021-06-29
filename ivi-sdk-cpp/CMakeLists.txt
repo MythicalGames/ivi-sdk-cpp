@@ -38,17 +38,12 @@ set(_PROTOBUF_LIBPROTOBUF libprotobuf)
 set(_REFLECTION grpc++_reflection)
 set(_PROTOBUF_PROTOC $<TARGET_FILE:protoc>)
 set(_GRPC_GRPCPP grpc++)
-#if(CMAKE_CROSSCOMPILING)
-#find_program(_GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
-#else()
 set(_GRPC_CPP_PLUGIN_EXECUTABLE $<TARGET_FILE:grpc_cpp_plugin>)
-#endif()
 
-# @TODO Change the tag to a release version when available
 FetchContent_Declare(
 	ivi-sdk-proto
 	GIT_REPOSITORY https://github.com/MythicalGames/ivi-sdk-proto
-	GIT_TAG origin/develop
+	GIT_TAG        v2.0
 )
 FetchContent_Populate(ivi-sdk-proto)
 
@@ -181,8 +176,17 @@ if(IVI_SDK_SHARED_LIB)
 		${ivi_sdk_hdrs})
 	
 	target_compile_definitions(ivi-sdk-cpp PRIVATE IVI_SDK_EXPORT)
+	# only export the explicity exported IVI_SDK_API interfaces
+	set_property(TARGET ivi-sdk-cpp PROPERTY C_VISIBILITY_PRESET hidden)
+	set_property(TARGET ivi-sdk-cpp PROPERTY CXX_VISIBILITY_PRESET hidden)
+	set_property(TARGET ivi-sdk-cpp PROPERTY VISIBILITY_INLINES_HIDDEN ON)
 	if(MSVC)
 		add_compile_options(/wd4251) #disable warnings about STL linkage
+	else()
+		set_property(TARGET ivi-sdk-cpp 
+			PROPERTY POSITION_INDEPENDENT_CODE 1)
+		set_property(TARGET ivi-sdk-cpp-generated 
+			PROPERTY POSITION_INDEPENDENT_CODE 1)
 	endif() # MSVC
 	
 else() # NOT IVI_SDK_EXPORT

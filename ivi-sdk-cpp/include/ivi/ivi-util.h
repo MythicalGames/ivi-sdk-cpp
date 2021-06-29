@@ -1,6 +1,8 @@
 #ifndef __IVI_UTIL_H__
 #define __IVI_UTIL_H__
 
+#include "ivi/ivi-sdk.h"
+
 #ifndef IVI_STATIC_ASSERT
 #define IVI_STATIC_ASSERT(expr) static_assert(expr, #expr)
 #endif // IVI_STATIC_ASSERT
@@ -63,11 +65,11 @@
         using LogStreamFunc     = void(*)(LogLevel, ostringstream& oss);
 
         // Set this at runtime to your own callback, default just prints to standard out
-        extern LogFunc          IVILogImpl;  
-        extern LogStreamFunc    IVILogStreamImpl;
+        IVI_SDK_API extern LogFunc          IVILogImpl;
+        IVI_SDK_API extern LogStreamFunc    IVILogStreamImpl;
 
         // Appends the current timestamp and LogLevel string
-        void LogPrefix(LogLevel logLevel, ostringstream& oss);
+        void IVI_SDK_API LogPrefix(LogLevel logLevel, ostringstream& oss);
 
         template<typename... Args>
         void IVILog(const LogLevel logLevel, Args&&... args)

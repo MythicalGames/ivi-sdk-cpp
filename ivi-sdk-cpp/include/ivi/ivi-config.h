@@ -44,6 +44,8 @@ namespace ivi
                                                     const IVIConfiguration& configuration,
                                                     const grpc::ChannelArguments& args,
                                                     int32_t connectionTimeoutSecs = 10);
+        static IVIConnectionPtr                 InsecureConnection(
+                                                    const string& privateHost);
     };
 }
 

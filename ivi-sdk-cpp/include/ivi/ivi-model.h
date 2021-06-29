@@ -11,9 +11,9 @@
 // STL implementations, particularly copy/move semantics and NRVO.
 namespace ivi
 {
-    string                              GoogleStructToJsonString(const google::protobuf::Struct& protoStruct);
+    string IVI_SDK_API                     GoogleStructToJsonString(const google::protobuf::Struct& protoStruct);
 
-    google::protobuf::Struct            JsonStringToGoogleStruct(const string& jsonString);
+    google::protobuf::Struct IVI_SDK_API   JsonStringToGoogleStruct(const string& jsonString);
 
     struct IVI_SDK_API IVIMetadata
     {

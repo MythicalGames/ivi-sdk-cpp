@@ -201,21 +201,29 @@ protected:
     {
         constexpr const uint32_t portMin = 1 << 13;
         constexpr const uint32_t portMax = 1 << 15;
-        static uint32_t port = RandomInt() % (portMax - portMin);
-        string host = "localhost:" + std::to_string(++port);
+        static uint32_t port = (RandomInt() % (portMax - portMin)) + portMin;
+        
+        IVIConfigurationPtr config;
+        IVIConnectionPtr connection;
+        // Setup server - loop in case the connection fails
+        do 
+        {
+            if (m_server)
+            {
+                std::cout << std::endl << "ClientTest failed to connect to " << config->host << std::endl;
+                m_server->Shutdown();
+                m_server->Wait();
+            }
 
-        // Setup server
-        grpc::ServerBuilder builder;
-        builder.AddListeningPort(host, grpc::InsecureServerCredentials());
-        builder.RegisterService(&m_service);
-        m_server = builder.BuildAndStart();
+            string host = "localhost:" + std::to_string(++port);
+            grpc::ServerBuilder builder;
+            builder.AddListeningPort(host, grpc::InsecureServerCredentials());
+            builder.RegisterService(&m_service);
+            m_server = builder.BuildAndStart();
+            config = IVIConfiguration::DefaultConfiguration(EnvironmentId, ApiKey, host);
+            connection = IVIConnection::InsecureConnection(host);
 
-        IVIConfigurationPtr config(IVIConfiguration::DefaultConfiguration(EnvironmentId, ApiKey, host));
-        IVIConnectionPtr connection(make_shared<IVIConnection>(
-            IVIConnection{ grpc::CreateChannel(host, grpc::InsecureChannelCredentials()),
-                            make_shared<grpc::CompletionQueue>(),
-                            make_shared<grpc::CompletionQueue>()
-            }));
+        } while (port < portMax && !connection->channel->WaitForConnected(gpr_timespec{ 5, 0, GPR_TIMESPAN }));
 
         m_syncManager.reset(new IVIClientManagerSync(config, connection));
         m_asyncManager.reset(new IVIClientManagerAsync(config, connection, *TCallbacks));
@@ -226,6 +234,7 @@ protected:
         m_asyncManager.reset(nullptr);
         m_syncManager.reset(nullptr);
         m_server->Shutdown();
+        m_server->Wait();
     }
 
     unique_ptr<grpc::Server>            m_server;

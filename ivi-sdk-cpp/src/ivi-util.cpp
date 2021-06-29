@@ -62,8 +62,8 @@ namespace ivi
         oss << LogLevelPrefix[static_cast<int>(logLevel)];
     }
 
-    LogFunc         IVILogImpl      (&DefaultLog);
-    LogStreamFunc   IVILogStreamImpl(&DefaultLogStream);
+    IVI_SDK_API LogFunc         IVILogImpl      (&DefaultLog);
+    IVI_SDK_API LogStreamFunc   IVILogStreamImpl(&DefaultLogStream);
 }
 
 #endif // IVI_LOGGING_ENABLED

@@ -102,4 +102,15 @@ IVIConnectionPtr IVIConnection::DefaultConnection(
             });
 }
 
+IVIConnectionPtr IVIConnection::InsecureConnection(const string& privateHost)
+{
+    IVI_CHECK(privateHost != IVIConfiguration::DefaultHost());
+    return make_shared<IVIConnection>(
+            IVIConnection{ 
+                grpc::CreateChannel(privateHost, grpc::InsecureChannelCredentials()),
+                make_shared<grpc::CompletionQueue>(),
+                make_shared<grpc::CompletionQueue>()
+            });
+}
+
 }

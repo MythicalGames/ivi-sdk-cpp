@@ -30,7 +30,8 @@ namespace ivi
         : public IVIClientT<rpc::api::item::ItemService>
     {
     public:
-        using                           IVIClientT<ServiceT>::IVIClientT;
+         using                           IVIClientT<ServiceT>::IVIClientT;
+         virtual                         ~IVIItemClient();
 
          IVIResultItemStateChange       IssueItem(
                                             const string& gameInventoryId,
@@ -82,6 +83,7 @@ namespace ivi
     {
     public:
         using                           IVIClientT<ServiceT>::IVIClientT;
+        virtual                         ~IVIItemClientAsync();
 
         void                            IssueItem(
                                             const string& gameInventoryId,
@@ -149,6 +151,7 @@ namespace ivi
     {
     public:
         using                           IVIClientT<ServiceT>::IVIClientT;
+        virtual                         ~IVIItemTypeClient();
 
         IVIResultItemType               GetItemType(
                                             const string& gameItemTypeId);
@@ -181,6 +184,7 @@ namespace ivi
     {
     public:
         using                           IVIClientT<ServiceT>::IVIClientT;
+        virtual                         ~IVIItemTypeClientAsync();
 
         void                            GetItemType(
                                             const string& gameItemTypeId,
@@ -222,6 +226,7 @@ namespace ivi
     {
     public:
         using                           IVIClientT<ServiceT>::IVIClientT;
+        virtual                         ~IVIPlayerClient();
 
         IVIResultPlayerStateChange      LinkPlayer(
                                             const string& playerId,
@@ -243,6 +248,7 @@ namespace ivi
     {
     public:
         using                           IVIClientT<ServiceT>::IVIClientT;
+        virtual                         ~IVIPlayerClientAsync();
 
         void                            LinkPlayer(
                                             const string& playerId,
@@ -270,6 +276,7 @@ namespace ivi
     {
     public:
         using                           IVIClientT<ServiceT>::IVIClientT;
+        virtual                         ~IVIOrderClient();
 
         IVIResultOrder                  GetOrder(
                                             const string& orderId);
@@ -308,6 +315,7 @@ namespace ivi
     {
     public:
         using                           IVIClientT<ServiceT>::IVIClientT;
+        virtual                         ~IVIOrderClientAsync();
 
         void                            GetOrder(
                                             const string& orderId,
@@ -353,6 +361,7 @@ namespace ivi
     {
     public:
         using                           IVIClientT<ServiceT>::IVIClientT;
+        virtual                         ~IVIPaymentClient();
 
         IVIResultToken                  GetToken(
                                             PaymentProviderId id,
@@ -364,6 +373,7 @@ namespace ivi
     {
     public:
         using                           IVIClientT<ServiceT>::IVIClientT;
+        virtual                         ~IVIPaymentClientAsync();
 
         void                            GetToken(
                                             PaymentProviderId id,
@@ -381,7 +391,7 @@ namespace ivi
         using ServiceType           = rpc::streams::item::ItemStream;
     };
 
-    class IVI_SDK_API IVIItemStreamClient final
+    class IVI_SDK_API IVIItemStreamClient
         : public IVIStreamClientT<IVIItemStreamClientTraits>
     {
     public:
@@ -406,7 +416,7 @@ namespace ivi
         using ServiceType           = rpc::streams::itemtype::ItemTypeStatusStream;
     };
 
-    class IVI_SDK_API IVIItemTypeStreamClient final
+    class IVI_SDK_API IVIItemTypeStreamClient
         : public IVIStreamClientT<IVIItemTypeStreamClientTraits>
     {
     public:
@@ -431,7 +441,7 @@ namespace ivi
         using ServiceType           = rpc::streams::order::OrderStream;
     };
 
-    class IVI_SDK_API IVIOrderStreamClient final
+    class IVI_SDK_API IVIOrderStreamClient
         : public IVIStreamClientT<IVIOrderStreamClientTraits>
     {
     public:
@@ -455,7 +465,7 @@ namespace ivi
         using ServiceType           = rpc::streams::player::PlayerStream;
     };
 
-    class IVI_SDK_API IVIPlayerStreamClient final
+    class IVI_SDK_API IVIPlayerStreamClient
         : public IVIStreamClientT<IVIPlayerStreamClientTraits>
     {
     public:

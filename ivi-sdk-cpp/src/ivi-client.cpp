@@ -589,7 +589,8 @@ namespace ivi
     template IVIClientT<IVIItemClient::ServiceT>::IVIClientT(
         const IVIConfigurationPtr& configuration,
         const IVIConnectionPtr& conn);
-    template IVIClientT<IVIItemClient::ServiceT>::~IVIClientT();
+    IVIItemClient::~IVIItemClient() {}
+    IVIItemClientAsync::~IVIItemClientAsync() {}
 
     static proto::api::item::IssueItemRequest MakeIssueItemRequest(
         const string& gameInventoryId,
@@ -943,7 +944,8 @@ namespace ivi
     template IVIClientT<IVIItemTypeClient::ServiceT>::IVIClientT(
         const IVIConfigurationPtr& configuration,
         const IVIConnectionPtr& conn);
-    template IVIClientT<IVIItemTypeClient::ServiceT>::~IVIClientT();
+    IVIItemTypeClient::~IVIItemTypeClient() {}
+    IVIItemTypeClientAsync::~IVIItemTypeClientAsync() {}
 
     static IVIResultItemType ParseItemTypeListToElement(const IVIResultItemTypeList& result)
     {
@@ -1200,7 +1202,8 @@ namespace ivi
     template IVIClientT<IVIPlayerClient::ServiceT>::IVIClientT(
         const IVIConfigurationPtr& configuration,
         const IVIConnectionPtr& conn);
-    template IVIClientT<IVIPlayerClient::ServiceT>::~IVIClientT();
+    IVIPlayerClient::~IVIPlayerClient() {}
+    IVIPlayerClientAsync::~IVIPlayerClientAsync() {}
 
     static proto::api::player::LinkPlayerRequest MakeLinkPlayerRequest(
         const string& playerId,
@@ -1356,7 +1359,8 @@ namespace ivi
     template IVIClientT<IVIOrderClient::ServiceT>::IVIClientT(
         const IVIConfigurationPtr& configuration,
         const IVIConnectionPtr& conn);
-    template IVIClientT<IVIOrderClient::ServiceT>::~IVIClientT();
+    IVIOrderClient::~IVIOrderClient() {}
+    IVIOrderClientAsync::~IVIOrderClientAsync() {}
 
     static proto::api::order::GetOrderRequest MakeGetOrderRequest(const string& orderId)
     {
@@ -1575,7 +1579,8 @@ namespace ivi
     template IVIClientT<IVIPaymentClient::ServiceT>::IVIClientT(
         const IVIConfigurationPtr& configuration,
         const IVIConnectionPtr& conn);
-    template IVIClientT<IVIPaymentClient::ServiceT>::~IVIClientT();
+    IVIPaymentClient::~IVIPaymentClient() {}
+    IVIPaymentClientAsync::~IVIPaymentClientAsync() {}
 
     static proto::api::payment::CreateTokenRequest MakeCreateTokenRequest(
         PaymentProviderId id,

@@ -10,22 +10,28 @@ The *IVI C++ SDK* is a turnkey wrapper and management layer around the underlyin
 * Should be compatible with any _C++11_ compliant toolchain that can build gRPC, and should also work with _C++14_ and _C++17_ language standards.
 
 Given cmake and an appropriate C++ toolchain installed, from the root directory, to get the example up and running simply run:
-* `cmake ./` to auto-configure the cmake cache and download dependencies
-* `cmake --build ./` to compile everything, including the example program `ivi-sdk-example`
-* `cmake -DBUILD_TESTING=ON ./` to configure the unit test executable `ivi-sdk-test` availble in the `ivi-sdk-cpp/tests/` subdirectory.
+* `cmake -B <build-dir> -S <ivi-sdk-cpp-dir>` to auto-configure the cmake cache and download dependencies.  Add `-DBUILD_TESTING=ON` if you wish to build the googletest-based unit testing executable as well.
+* `cmake --build <build-dir>` to compile everything, including the example program `ivi-sdk-example`
+* Pass cmake `-DBUILD_TESTING=ON` to configure the unit test executable `ivi-sdk-test` available in the `ivi-sdk-cpp/tests/` subdirectory.
 
 See `ivi-sdk-example.cpp` for a basic demonstration on how to interact with the SDK.
+
+## Running the Example
 
 Run the `ivi-sdk-example` executable to see it connect and perform some trivial and naive calls to the IVI API, including bad RPC calls to demonstrate error handling.  You will have to supply a valid environment ID, API key, and optionally a specific IVI host as command line arguments or environment variables.
 
 Additionally, on Windows you will need to manually supply a certificate PEM file for gRPC's SSL connection. The one packaged with gRPC is sufficient and can be specified by setting this [gRPC environment variable](https://github.com/grpc/grpc/blob/master/doc/environment_variables.md) appropriately after running cmake:
 ```GRPC_DEFAULT_SSL_ROOTS_FILE_PATH=<CMAKE_BUILD_ROOT>\_deps\grpc-ivi-src\etc\roots.pem```
 
-The IVI SDK's `CMakeLists.txt` configurations are purposely minimalist and rely on `FetchContent` for the gRPC dependency to simplify integration into other dependency trees, and are based on [gRPC C++'s recommendations](https://github.com/grpc/grpc/tree/master/src/cpp).  The IVI cmake configuration purposely eschews system-installed gRPC detection in preference of a local known-working version fetched under the name `grpc-ivi`.  Theoretically any compatible version of gRPC should work but practically this may cause problems.  If you do not use `cmake` as or in your primary build system, you of course can prebuild the `ivi-sdk-cpp` library and copy the headers, just keep in mind the STL dependencies will require consistent compilation configurations.
+## Application Integration
 
-`ivi-util.h` exposes several preprocessor directives for basic configuration, particularly logging, that can also be specified via `cmake -D`.  You will want to examine these when making your application production-ready.  See the header comments.
+The IVI SDK's `CMakeLists.txt` configurations are purposely minimalist and rely on [`FetchContent`](https://cmake.org/cmake/help/latest/module/FetchContent.html) for the gRPC dependency to simplify integration into other dependency trees, and are based on [gRPC C++'s recommendations](https://github.com/grpc/grpc/tree/master/src/cpp).  The IVI cmake configuration purposely eschews system-installed gRPC detection in preference of a local known-working version fetched under the name `grpc-ivi`.  Theoretically any compatible version of gRPC should work but in practice this may cause problems.  If you do not use `cmake` as or in your primary build system, you of course can prebuild the `ivi-sdk-cpp` library and copy the headers, just keep in mind ABI compatibility and the public STL dependencies will require consistent compilation configurations.
 
-## Usage
+The SDK is built as a static library by default.  It is buildable as a shared library by passing cmake `-DIVI_SDK_SHARED_LIB=ON`.  This may be necessary eg if the application binary requires linking different versions of gRPC.  If this applies to your application, be aware that some gRPC objects (eg, `grpc::Channel`) will not function correctly if allocated from a different library instance from where they are passed (eg, thread-local-storage bugs).
+
+`ivi-util.h` exposes several preprocessor and runtime directives for basic configuration, particularly logging, that can also be specified via `cmake -D` or `add_compile_definition`.  You will want to examine these when making your application production-ready.  See the header comments.
+
+## API Basics
 
 The primary interfaces exposed by the `ivi-sdk-cpp` lib are:
 * `ivi-model.h` - data structure definitions
@@ -40,7 +46,6 @@ The `IVIClientManagerSync` class provides a blocking interface to the IVI API.  
 There is no SDK requirement to use the prewritten _ClientManager_ classes, they only rely on the public interfaces of the various Client wrappers and gRPC; there is no usage of `friend` semantics in the SDK or other tight coupling.
 
 The default cmake configuration exposes the generated protobuf and gRPC headers via a separate library, `ivi-sdk-cpp-generated`, which is specifically not listed as a public dependency of `ivi-sdk-cpp` to prevent massive header pollution from protobuf and gRPC.  Adding the generated lib to your own dependency tree allows you to:
-* Directly use the various `enum` definitions contained in the protobuf headers.  (Alternatively you can just copy-paste these enum definitions into your own source files.)
 * Manipulate lower-level gRPC parameters, such as connection and channel arguments.
 * Write your own Client or ClientManager implementations, eg to use your own I/O threading semantics with gRPC.
 
@@ -49,9 +54,8 @@ The SDK is written with public dependencies only on basic STL types.  These type
 ## Minutae
 
 * The SDK has **not** been tested against protobuf/gRPC's _Arena_ allocation configuration.
-* The SDK has **not** been tested to run as a shared library (.so) / dynamically-linked library (DLL), though the necessary linkage specifiers are available and dynamic linkage can be enabled via the cmake option `IVI_SDK_EXPORT`.  If your application already uses a different version of protobuf or gRPC, you will have to either use dynamic linkage to the IVI SDK or reconfigure the IVI SDK build to use your version.  Remember to keep in mind the subtleties of dynamic linkage with exposed STL types.
 * This C++ SDK somewhat mirrors the [IVI Java SDK](https://github.com/MythicalGames/ivi-sdk-java), with a few important semantic differences:
-  * The C++ SDK only executes the stream callbacks when receiving server data.  It does **not** automatically call these _executors_ after receiving the results of semantically related unary RPCs, unary RPC result processing is entirely up to the client application, **unlike** the Java SDK.
+  * The C++ SDK only executes the stream callbacks when receiving server data.  It does **not** automatically call these _executors_ after receiving the results of semantically related unary RPCs, unary RPC result processing is entirely up to the client application, **unlike** the Java SDK.  Instead the results are returned to the caller to passed to the passed-in callback for sync and async clients respectively.
   * Call errors on unary RPC requests are reported via the IVIResult.Status() code, exception semantics are **not** used for API errors.  Any C++ exceptions originating from the SDK are possible programming errors and may be reported as bugs.
   * gRPC internally will abort the running program if it runs into certain unrecoverable error states.  These are typically the result of configuration errors or programming errors.  A handful of known detectable errors will also lead to the program-exit behavior from the SDK unless `IVI_ENABLE_EXIT_ON_FAIL_CHECK` is set to 0 at build time.
   
@@ -62,5 +66,4 @@ If you have the desire to dive into the source and modify the clients or bypass 
 * Heavy reliance on `C++11` semantics, including RVO / NRVO, lambda calculus, move semantics, aggregate initialization, and implicit member construction/destruction ordering
 * Avoidance of `C++11` language / library features that are known to be deprecated in subsequent / future language standards.
 * The boilerplate gRPC calls have been hidden away in some moderately complex class and function templates, start with `ivi-client-t.h` if you are curious about the inner workings.
-* Virtual inheritance is entirely avoided in IVI classes, except where mandated by dependency interfaces.
 
