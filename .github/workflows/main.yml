@@ -31,9 +31,16 @@ jobs:
         timeout-minutes: 60
         run: cmake --build ./
 
-      - name: Verify artifacts
+      - name: Verify library artifact
+        if: ${{ matrix.shared_lib == 'OFF' }}
+        run: ls -l ivi-sdk-cpp/libivi-sdk-cpp.a
+
+      - name: Verify library artifact
+        if: ${{ matrix.shared_lib == 'ON' }}
+        run: ls -l ivi-sdk-cpp/libivi-sdk-cpp.so
+
+      - name: Verify other artifacts
         run: |
-          ls -l ivi-sdk-cpp/libivi-sdk-cpp.a
           ls -l ivi-sdk-example/ivi-sdk-example
           ls -l ivi-sdk-cpp/tests/ivi-sdk-test
 
@@ -66,10 +73,18 @@ jobs:
         timeout-minutes: 60
         run: cmake --build ./
 
-      - name: Verify artifacts
+      - name: Verify library artifact
+        if: ${{ matrix.shared_lib == 'OFF' }}
+        run: ls -l ivi-sdk-cpp/libivi-sdk-cpp.a
+
+      - name: Verify library artifact
+        if: ${{ matrix.shared_lib == 'ON' }}
+        run: ls -l ivi-sdk-cpp/libivi-sdk-cpp.so
+
+      - name: Verify other artifacts
         run: |
-          ls -l ivi-sdk-cpp/libivi-sdk-cpp.a
           ls -l ivi-sdk-example/ivi-sdk-example
+          ls -l ivi-sdk-cpp/tests/ivi-sdk-test
 
       - name: Run tests
         run: ivi-sdk-cpp/tests/ivi-sdk-test
