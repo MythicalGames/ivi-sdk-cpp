@@ -18,13 +18,14 @@ jobs:
       fail-fast: false
       matrix:
         cxx_standard: [11, 14, 17]
+        shared_lib: [ON, OFF]
       max-parallel: 3
 
     steps:
       - uses: actions/checkout@v2
 
       - name: Configure cmake
-        run: cmake -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_CXX_STANDARD=${{ matrix.cxx_standard }} -DBUILD_TESTING=ON ./
+        run: cmake -DCMAKE_CXX_STANDARD=${{ matrix.cxx_standard }} -DIVI_SDK_SHARED_LIB=${{ matrix.shared_lib }} -DBUILD_TESTING=ON ./
 
       - name: Compile C++ source
         timeout-minutes: 60
@@ -52,13 +53,14 @@ jobs:
       fail-fast: false
       matrix:
         cxx_standard: [11, 14, 17]
+        shared_lib: [ON, OFF]
       max-parallel: 3
 
     steps:
       - uses: actions/checkout@v2
 
       - name: Configure cmake
-        run: cmake -DCMAKE_CXX_STANDARD=${{ matrix.cxx_standard }} -DBUILD_TESTING=ON ./
+        run: cmake -DCMAKE_CXX_STANDARD=${{ matrix.cxx_standard }} -DIVI_SDK_SHARED_LIB=${{ matrix.shared_lib }} -DBUILD_TESTING=ON ./
 
       - name: Compile C++ source
         timeout-minutes: 60
