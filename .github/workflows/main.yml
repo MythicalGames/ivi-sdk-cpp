@@ -19,7 +19,7 @@ jobs:
       matrix:
         cxx_standard: [11, 14, 17]
         shared_lib: [ON, OFF]
-      max-parallel: 3
+      max-parallel: 6
 
     steps:
       - uses: actions/checkout@v2
@@ -61,7 +61,7 @@ jobs:
       matrix:
         cxx_standard: [11, 14, 17]
         shared_lib: [ON, OFF]
-      max-parallel: 3
+      max-parallel: 6
 
     steps:
       - uses: actions/checkout@v2
