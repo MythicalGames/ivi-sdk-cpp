@@ -53,6 +53,7 @@ There is no SDK requirement to use the prewritten _ClientManager_ classes, they 
 
 The default cmake configuration exposes the generated protobuf and gRPC headers via a separate library, `ivi-sdk-cpp-generated`, which is specifically not listed as a public dependency of `ivi-sdk-cpp` to prevent massive header pollution from protobuf and gRPC.  Adding the generated lib to your own dependency tree allows you to:
 * Manipulate lower-level gRPC parameters, such as connection and channel arguments.
+* Use the `google::protobuf::Struct` object for JSON manipulation, wrapped in `ivi-model.h` with `GoogleStructToJsonString` and `JsonStringToGoogleStruct`
 * Write your own Client or ClientManager implementations, eg to use your own I/O threading semantics with gRPC.
 
 The SDK is written with public dependencies only on basic STL types.  These types have been aliased in `ivi-types.h` should you decide to subsitute other STL-interface-compatible types, however be aware that the underlying protobuf and gRPC libraries heavily rely on STL.  If you do subsitute your own types into ivi-types.h, it is strongly advised to ensure the `ivi-sdk-test` unit tester passes all tests.

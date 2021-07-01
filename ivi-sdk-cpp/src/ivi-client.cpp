@@ -981,6 +981,17 @@ namespace ivi
             });
     }
 
+    IVIResultItemTypeList IVIItemTypeClient::GetItemTypes()
+    {
+        return GetItemTypes(StringList());
+    }
+
+    void IVIItemTypeClientAsync::GetItemTypes(
+        const function<void(const IVIResultItemTypeList&)>& callback)
+    {
+        GetItemTypes(StringList(), callback);
+    }
+
     static proto::api::itemtype::GetItemTypesRequest MakeGetItemTypesRequest(const StringList& gameItemTypeIds)
     {
         proto::api::itemtype::GetItemTypesRequest request;

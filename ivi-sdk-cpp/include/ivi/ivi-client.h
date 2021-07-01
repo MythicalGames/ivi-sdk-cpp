@@ -156,6 +156,8 @@ namespace ivi
         IVIResultItemType               GetItemType(
                                             const string& gameItemTypeId);
 
+        IVIResultItemTypeList           GetItemTypes();
+
         IVIResultItemTypeList           GetItemTypes(
                                             const StringList& gameItemTypeIds);
 
@@ -189,6 +191,9 @@ namespace ivi
         void                            GetItemType(
                                             const string& gameItemTypeId,
                                             const function<void(const IVIResultItemType&)>& callback);
+
+        void                            GetItemTypes(
+                                            const function<void(const IVIResultItemTypeList&)>& callback);
 
         void                            GetItemTypes(
                                             const StringList& gameItemTypeIds,

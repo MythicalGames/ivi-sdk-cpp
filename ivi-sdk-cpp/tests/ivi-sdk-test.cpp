@@ -48,30 +48,33 @@ std::mt19937& RandomEng()
     return randEng;
 }
 
+
 template<typename TInt = uint32_t>
 TInt RandomInt()
 {
-    return static_cast<TInt>(RandomEng()());
+    return std::uniform_int_distribution<TInt>(std::numeric_limits<TInt>::min())(RandomEng());
 }
 
-template<>
-int64_t RandomInt<int64_t>()
+template<typename TInt = uint32_t>
+TInt RandomInt(TInt min, TInt maxExcl)
 {
-    int64_t retVal;
-    uint32_t* const casted(reinterpret_cast<uint32_t*>(&retVal));
-    casted[0] = RandomInt();
-    casted[1] = RandomInt();
-    return retVal;
+    return std::uniform_int_distribution<TInt>(min, maxExcl - 1)(RandomEng());
+}
+
+template<typename TInt = uint32_t>
+TInt RandomInt(TInt maxExcl)
+{
+    return RandomInt<TInt>(0, maxExcl);
 }
 
 uint32_t RandomCount()
 {
-    return RandomInt<uint32_t>() % 20 + 1;
+    return RandomInt<uint32_t>(1, 20);
 }
 
 bool RandomBool()
 {
-    return static_cast<bool>(RandomInt() % 2 == 0);
+    return static_cast<bool>(RandomInt(2) == 0);
 }
 
 template<class RealType = double> 
@@ -110,7 +113,7 @@ string RandomString(uint32_t len)
 list<string> RandomStringList(int32_t strLen, int32_t maxListLen)
 {
     list<string> retVal;
-    const int count = RandomInt() % maxListLen;
+    const int count = RandomInt(maxListLen);
     for (int i = 0; i < maxListLen; ++i)
         retVal.push_back(RandomString(strLen));
     return retVal;
@@ -119,9 +122,9 @@ list<string> RandomStringList(int32_t strLen, int32_t maxListLen)
 template<typename TMap>
 typename TMap::key_type RandomKey(const TMap& aMap)
 {
-    const uint32_t idx = RandomInt() % aMap.size();
+    const size_t idx = RandomInt(aMap.size());
     auto it(aMap.begin());
-    for (uint32_t i = 0; i < idx; ++i, ++it);
+    for (size_t i = 0; i < idx; ++i, ++it);
     return it->first;
 }
 
@@ -201,7 +204,7 @@ protected:
     {
         constexpr const uint32_t portMin = 1 << 13;
         constexpr const uint32_t portMax = 1 << 15;
-        static uint32_t port = (RandomInt() % (portMax - portMin)) + portMin;
+        static uint32_t port = RandomInt(portMin, portMax);
         
         IVIConfigurationPtr config;
         IVIConnectionPtr connection;
@@ -465,10 +468,15 @@ public:
         return AnError(::grpc::StatusCode::NOT_FOUND);
     }
 
+    bool getItemsReturnsNothing = false;
     proto::api::item::GetItemsRequest lastGetItemsRequest;
     ::grpc::Status GetItems(::grpc::ServerContext* context, const proto::api::item::GetItemsRequest* request, ::ivi::proto::api::item::Items* response) override
     {
         lastGetItemsRequest = *request;
+
+        if(getItemsReturnsNothing)
+            return ::grpc::Status::OK;
+
         transform(SomeItems().begin(), SomeItems().end(), google::protobuf::RepeatedPtrFieldBackInserter(response->mutable_items()),
             [](const ItemMap::value_type& itemPair) { return itemPair.second.ToProto();  });
         return ::grpc::Status::OK;
@@ -671,10 +679,10 @@ TEST_F(ItemClientTest, GetItems)
 {
     struct RPCTestData
     {
-        time_t timestamp = Now() - RandomInt() % 100000;
-        int32_t pageSize = RandomInt() % 128;
-        SortOrder sortOrder = static_cast<SortOrder>(RandomInt() % proto::common::sort::SortOrder_ARRAYSIZE);
-        Finalized finalized = static_cast<Finalized>(RandomInt() % proto::common::finalization::Finalized_ARRAYSIZE);
+        time_t timestamp = Now() - RandomInt(100000);
+        int32_t pageSize = RandomInt(128);
+        SortOrder sortOrder = static_cast<SortOrder>(RandomInt(proto::common::sort::SortOrder_ARRAYSIZE));
+        Finalized finalized = static_cast<Finalized>(RandomInt(proto::common::finalization::Finalized_ARRAYSIZE));
     };
 
     auto checkResultSuccess = [&](const RPCTestData& data, const IVIResultItemList& result)
@@ -685,7 +693,7 @@ TEST_F(ItemClientTest, GetItems)
         ASSERT_EQ(data.pageSize, request.page_size());
         ASSERT_EQ(data.sortOrder, ECast(request.sort_order()));
         ASSERT_EQ(data.finalized, ECast(request.finalized()));
-        ASSERT_TRUE(result.Payload().size() > 0);
+        ASSERT_GT(result.Payload().size(), 0);
         ASSERT_EQ(result.Payload().size(), FakeItemService::SomeItems().size());
         std::for_each(result.Payload().begin(), result.Payload().end(),
             [](const IVIItem& item)
@@ -705,6 +713,20 @@ TEST_F(ItemClientTest, GetItems)
     };
 
     ClientTest::template UnaryTest<RPCTestData>(checkResultSuccess, syncCaller, asyncCaller);
+
+    auto checkEmptyResultSuccess = [&](const RPCTestData& data, const IVIResultItemList& result)
+    {
+        const proto::api::item::GetItemsRequest& request(m_service.lastGetItemsRequest);
+        ASSERT_TRUE(result.Success());
+        ASSERT_EQ(data.timestamp, request.created_timestamp());
+        ASSERT_EQ(data.pageSize, request.page_size());
+        ASSERT_EQ(data.sortOrder, ECast(request.sort_order()));
+        ASSERT_EQ(data.finalized, ECast(request.finalized()));
+        ASSERT_EQ(result.Payload().size(), 0);
+    };
+
+    m_service.getItemsReturnsNothing = true;
+    ClientTest::template UnaryTest<RPCTestData>(checkEmptyResultSuccess, syncCaller, asyncCaller);
 }
 
 TEST_F(ItemClientTest, UpdateItemMetadata)
@@ -796,7 +818,7 @@ TEST_F(ItemClientTest, UpdateItemMetadataList)
 
 IVIItemType GenerateItemType()
 {
-    uint32_t maxSupply = RandomInt() % (1024 * 1024);
+    uint32_t maxSupply = RandomInt(1024 * 1024);
     uint32_t currentSupply = maxSupply % 1024;
     uint32_t issuedSupply = maxSupply - currentSupply;
     return
@@ -815,7 +837,7 @@ IVIItemType GenerateItemType()
         GenerateMetadata(),
         Now() - 20000,
         Now(),
-        static_cast<ItemTypeState>(RandomInt() % proto::common::itemtype::ItemTypeState_ARRAYSIZE),
+        static_cast<ItemTypeState>(RandomInt(proto::common::itemtype::ItemTypeState_ARRAYSIZE)),
         RandomBool(),
         RandomBool(),
         RandomBool(),
@@ -898,6 +920,15 @@ public:
     ::grpc::Status GetItemTypes(::grpc::ServerContext* context, const ::ivi::proto::api::itemtype::GetItemTypesRequest* request, ::ivi::proto::api::itemtype::ItemTypes* response) override
     {
         lastGetItemTypeRequest = *request;
+
+        // special case - returns everything
+        if (request->game_item_type_ids().size() == 0)
+        {
+            transform(SomeItemTypes().begin(), SomeItemTypes().end(), google::protobuf::RepeatedPtrFieldBackInserter(response->mutable_item_types()),
+                [](const ItemTypeMap::value_type& itemPair) { return itemPair.second.ToProto();  });
+            return ::grpc::Status::OK;
+        }
+
         for (auto it(request->game_item_type_ids().begin()); it != request->game_item_type_ids().end(); ++it)
         {
             auto findIt(SomeItemTypes().find(*it));
@@ -981,7 +1012,7 @@ TEST_F(ItemTypeClientTest, GetItemTypes)
         list<string> gameItemTypeIds;
         RPCTestData()
         { 
-            const size_t count = RandomInt() % FakeItemTypeService::SomeItemTypes().size();
+            const size_t count = RandomInt<size_t>(1, FakeItemTypeService::SomeItemTypes().size());
             for (size_t i = 0; i < count; ++i)
             {
                 gameItemTypeIds.push_back(RandomKey(FakeItemTypeService::SomeItemTypes()));
@@ -1011,6 +1042,37 @@ TEST_F(ItemTypeClientTest, GetItemTypes)
     auto asyncCaller = [&](const RPCTestData& data, const function<void(const IVIResultItemTypeList&)>& callback)
     {
         m_asyncManager->ItemTypeClient().GetItemTypes(data.gameItemTypeIds, callback);
+    };
+
+    ClientTest::template UnaryTest<RPCTestData>(checkResultSuccess, syncCaller, asyncCaller);
+}
+
+TEST_F(ItemTypeClientTest, GetItemTypes_All)
+{
+    struct RPCTestData
+    {};
+
+    auto checkResultSuccess = [&](const RPCTestData& data, const IVIResultItemTypeList& result)
+    {
+        const proto::api::itemtype::GetItemTypesRequest& request(m_service.lastGetItemTypeRequest);
+        ASSERT_TRUE(result.Success());
+        ASSERT_EQ(request.game_item_type_ids().size(), 0);
+        ASSERT_EQ(result.Payload().size(), FakeItemTypeService::SomeItemTypes().size());
+        std::for_each(result.Payload().begin(), result.Payload().end(),
+            [](const IVIItemType& itemType)
+            {
+                CheckEq(itemType, FakeItemTypeService::SomeItemTypes().at(itemType.gameItemTypeId));
+            });
+    };
+
+    auto syncCaller = [&](const RPCTestData& data)
+    {
+        return m_syncManager->ItemTypeClient().GetItemTypes();
+    };
+
+    auto asyncCaller = [&](const RPCTestData& data, const function<void(const IVIResultItemTypeList&)>& callback)
+    {
+        m_asyncManager->ItemTypeClient().GetItemTypes(callback);
     };
 
     ClientTest::template UnaryTest<RPCTestData>(checkResultSuccess, syncCaller, asyncCaller);
@@ -1151,8 +1213,8 @@ IVIPlayer GeneratePlayer()
         RandomString(44),
         RandomString(50),
         RandomString(34),
-        Now() - (RandomInt() % 100000),
-        static_cast<PlayerState>(RandomInt() % proto::common::player::PlayerState_ARRAYSIZE)
+        Now() - RandomInt(100000),
+        static_cast<PlayerState>(RandomInt(proto::common::player::PlayerState_ARRAYSIZE))
     };
 }
 
@@ -1197,10 +1259,15 @@ public:
         return ::grpc::Status::OK;
     }
     
+    bool getPlayersReturnsNothing = false;
     proto::api::player::GetPlayersRequest lastGetPlayersRequest;
     ::grpc::Status GetPlayers(::grpc::ServerContext* context, const ::ivi::proto::api::player::GetPlayersRequest* request, ::ivi::proto::api::player::IVIPlayers* response) override
     {
         lastGetPlayersRequest = *request;
+
+        if (getPlayersReturnsNothing)
+            return ::grpc::Status::OK;
+
         transform(SomePlayers().begin(), SomePlayers().end(), RepeatedFieldBackInserter(response->mutable_ivi_players()),
             [](const FakePlayerService::PlayerMap::value_type& player) { return player.second.ToProto(); });
         return ::grpc::Status::OK;
@@ -1291,7 +1358,7 @@ TEST_F(PlayerServiceTest, GetPlayers)
     {
         time_t createdTimestamp = Now();
         int32_t pageSize = RandomInt();
-        SortOrder sortOrder = static_cast<SortOrder>(RandomInt() % proto::common::sort::SortOrder_ARRAYSIZE);
+        SortOrder sortOrder = static_cast<SortOrder>(RandomInt(proto::common::sort::SortOrder_ARRAYSIZE));
     };
 
     auto checkSuccessResult = [&](const RPCTestData& data, const IVIResultPlayerList& result)
@@ -1318,6 +1385,19 @@ TEST_F(PlayerServiceTest, GetPlayers)
     };
 
     ClientTest::template UnaryTest<RPCTestData>(checkSuccessResult, syncCaller, asyncCaller);
+
+    auto checkEmptyResultSuccess = [&](const RPCTestData& data, const IVIResultPlayerList& result)
+    {
+        const proto::api::player::GetPlayersRequest& request(m_service.lastGetPlayersRequest);
+        ASSERT_TRUE(result.Success());
+        ASSERT_EQ(request.created_timestamp(), data.createdTimestamp);
+        ASSERT_EQ(request.page_size(), data.pageSize);
+        ASSERT_EQ(request.sort_order(), ECast(data.sortOrder));
+    };
+
+    m_service.getPlayersReturnsNothing = true;
+
+    ClientTest::template UnaryTest<RPCTestData>(checkEmptyResultSuccess, syncCaller, asyncCaller);
 }
 
 IVIOrderAddress GenerateOrderAddress()
@@ -1372,10 +1452,10 @@ IVIOrder GenerateOrder()
         RandomString(12),
         RandomString(14),
         EnvironmentId,
-        Now() - (RandomInt() % 100000),
+        Now() - (RandomInt(100000)),
         GenerateJsonString(),
-        static_cast<PaymentProviderId>(RandomInt() % proto::api::order::payment::PaymentProviderId_ARRAYSIZE),
-        static_cast<OrderState>(RandomInt() % proto::common::order::OrderState_ARRAYSIZE)
+        static_cast<PaymentProviderId>(RandomInt(proto::api::order::payment::PaymentProviderId_ARRAYSIZE)),
+        static_cast<OrderState>(RandomInt(proto::common::order::OrderState_ARRAYSIZE))
     };
 }
 
@@ -1535,7 +1615,7 @@ TEST_F(OrderClientTest, CreatePrimaryOrder)
             string buyerPlayerId{ RandomString(14) };
             BigDecimal subTotal{ RandomFloatString(1.f, 100.f) };
             IVIOrderAddress address{ GenerateOrderAddress() };
-            PaymentProviderId paymentProviderId = static_cast<PaymentProviderId>(RandomInt() % proto::api::order::payment::PaymentProviderId_ARRAYSIZE);
+            PaymentProviderId paymentProviderId = static_cast<PaymentProviderId>(RandomInt(proto::api::order::payment::PaymentProviderId_ARRAYSIZE));
             IVIPurchasedItemsList purchasedItems{ GeneratePurchasedItemsList() };
             string metadata{ GenerateJsonString() };
             string requestIp{ RandomString(11) };
@@ -1856,7 +1936,7 @@ struct ISUPopulator
         retVal.set_tracking_id(RandomString(34));
         retVal.set_dgoods_id(RandomInt<int64_t>());
         retVal.set_serial_number(RandomInt());
-        retVal.set_item_state(static_cast<proto::common::item::ItemState>(RandomInt() % proto::common::item::ItemState_ARRAYSIZE));
+        retVal.set_item_state(static_cast<proto::common::item::ItemState>(RandomInt(proto::common::item::ItemState_ARRAYSIZE)));
         return retVal;
     }
 
@@ -1931,7 +2011,7 @@ struct ITSUPopulator
         retVal.set_current_supply(RandomInt());
         retVal.set_issued_supply(RandomInt());
         retVal.set_issue_time_span(RandomInt());
-        retVal.set_item_type_state(static_cast<proto::common::itemtype::ItemTypeState>(RandomInt() % proto::common::itemtype::ItemTypeState_ARRAYSIZE));
+        retVal.set_item_type_state(static_cast<proto::common::itemtype::ItemTypeState>(RandomInt(proto::common::itemtype::ItemTypeState_ARRAYSIZE)));
         return retVal;
     }
 
@@ -2000,7 +2080,7 @@ struct OSUPopulator
     {
         rpc::streams::order::OrderStatusUpdate retVal;
         retVal.set_order_id(RandomString(32));
-        retVal.set_order_state(static_cast<proto::common::order::OrderState>(RandomInt() % proto::common::order::OrderState_ARRAYSIZE));
+        retVal.set_order_state(static_cast<proto::common::order::OrderState>(RandomInt(proto::common::order::OrderState_ARRAYSIZE)));
         return retVal;
     }
 
@@ -2065,7 +2145,7 @@ struct PSUPopulator
         rpc::streams::player::PlayerStatusUpdate retVal;
         retVal.set_player_id(RandomString(32));
         retVal.set_tracking_id(RandomString(44));
-        retVal.set_player_state(static_cast<proto::common::player::PlayerState>(RandomInt() % proto::common::player::PlayerState_ARRAYSIZE));
+        retVal.set_player_state(static_cast<proto::common::player::PlayerState>(RandomInt(proto::common::player::PlayerState_ARRAYSIZE)));
         return retVal;
     }
 

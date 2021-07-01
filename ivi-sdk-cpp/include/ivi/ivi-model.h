@@ -20,7 +20,7 @@ namespace ivi
         string                          name;
         string                          description;
         string                          image;
-        string                          properties;
+        string                          properties;     // JSON
 
         static IVIMetadata              FromProto(const proto::common::Metadata& metadata);
         proto::common::Metadata         ToProto() const;
@@ -119,12 +119,12 @@ namespace ivi
         BigDecimal                          tax;
         BigDecimal                          total;
         IVIOrderAddress                     address;
-        string                              metadata;
+        string                              metadata;   // JSON
         string                              createdBy;
         string                              requestIp;
         string                              environmentId;
         time_t                              createdTimestamp;
-        string                              bitpayInvoice;
+        string                              bitpayInvoice;  // JSON
         PaymentProviderId                   paymentProviderId;
         OrderState                          orderStatus;
 
