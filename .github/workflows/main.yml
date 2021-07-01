@@ -6,14 +6,9 @@ on:
 
 jobs:
   build-with-gcc:
-    runs-on: cpp
+    runs-on: cpp-gcc
     timeout-minutes: 25
-    container:
-      image: ghcr.io/mythicalgames/ivi-sdk-cpp-ubuntu-gcc:v0.2
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.IVISDKCPP_GITHUBACTION_TOKEN }}
-
+    
     strategy:
       fail-fast: false
       matrix:
@@ -48,13 +43,8 @@ jobs:
         run: ivi-sdk-cpp/tests/ivi-sdk-test
 
   build-with-clang:
-    runs-on: cpp
+    runs-on: cpp-clang
     timeout-minutes: 25
-    container:
-      image: ghcr.io/mythicalgames/ivi-sdk-cpp-ubuntu-clang:v0.2
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.IVISDKCPP_GITHUBACTION_TOKEN }}
 
     strategy:
       fail-fast: false
