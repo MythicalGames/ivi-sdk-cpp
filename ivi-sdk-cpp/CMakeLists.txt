@@ -202,10 +202,16 @@ target_include_directories(ivi-sdk-cpp
 	PUBLIC include 
 )
 target_link_libraries(ivi-sdk-cpp
-	PRIVATE 
-		ivi-sdk-cpp-generated
+	PRIVATE ivi-sdk-cpp-generated
 )
 
 if(BUILD_TESTING)
 	add_subdirectory("tests")
 endif()
+
+set_target_properties(ivi-sdk-cpp 
+	PROPERTIES PUBLIC_HEADER "${ivi_sdk_hdrs}")
+
+install(TARGETS ivi-sdk-cpp
+	PUBLIC_HEADER DESTINATION "include/ivi"
+)
