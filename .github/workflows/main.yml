@@ -6,7 +6,7 @@ on:
 
 jobs:
   build-with-gcc:
-    runs-on: mono-runner
+    runs-on: cpp
     timeout-minutes: 25
     container:
       image: ghcr.io/mythicalgames/ivi-sdk-cpp-ubuntu-gcc:v0.2
@@ -48,7 +48,7 @@ jobs:
         run: ivi-sdk-cpp/tests/ivi-sdk-test
 
   build-with-clang:
-    runs-on: mono-runner
+    runs-on: cpp
     timeout-minutes: 25
     container:
       image: ghcr.io/mythicalgames/ivi-sdk-cpp-ubuntu-clang:v0.2
