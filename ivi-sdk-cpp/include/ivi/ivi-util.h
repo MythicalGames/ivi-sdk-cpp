@@ -46,19 +46,27 @@
 #define IVI_EXIT_FAILURE()
 #endif // IVI_ENABLE_EXIT_ON_FAIL_CHECK
 
-#if IVI_LOGGING_LEVEL > 0
+#define IVI_LOGGING_LEVEL_CRITICAL (1)
+#define IVI_LOGGING_LEVEL_WARNING  (IVI_LOGGING_LEVEL_CRITICAL + 1)
+#define IVI_LOGGING_LEVEL_RPC_FAIL (IVI_LOGGING_LEVEL_WARNING + 1)
+#define IVI_LOGGING_LEVEL_INFO     (IVI_LOGGING_LEVEL_RPC_FAIL + 1)
+#define IVI_LOGGING_LEVEL_VERBOSE  (IVI_LOGGING_LEVEL_INFO + 1)
+#define IVI_LOGGING_LEVEL_NTRACE   (IVI_LOGGING_LEVEL_VERBOSE + 1)
+#define IVI_LOGGING_LEVEL_DTRACE   (IVI_LOGGING_LEVEL_NTRACE + 1)
+
+#if IVI_LOGGING_LEVEL >= IVI_LOGGING_LEVEL_CRITICAL
     #include "ivi-types.h"
     namespace ivi
     {
         enum class LogLevel : int
         {
-            CRITICAL    = 1 << 1,
-            WARNING     = 1 << 2,
-            RPC_FAIL    = 1 << 3,
-            INFO        = 1 << 4,
-            VERBOSE     = 1 << 5,
-            NTRACE      = 1 << 6,   // network tracing
-            DTRACE      = 1 << 7    // debug tracing
+            CRITICAL    = 1 << IVI_LOGGING_LEVEL_CRITICAL,
+            WARNING     = 1 << IVI_LOGGING_LEVEL_WARNING,
+            RPC_FAIL    = 1 << IVI_LOGGING_LEVEL_RPC_FAIL,
+            INFO        = 1 << IVI_LOGGING_LEVEL_INFO,
+            VERBOSE     = 1 << IVI_LOGGING_LEVEL_VERBOSE,
+            NTRACE      = 1 << IVI_LOGGING_LEVEL_NTRACE,   // network tracing
+            DTRACE      = 1 << IVI_LOGGING_LEVEL_DTRACE    // debug (function) tracing
         };
 
         using LogFunc           = void(*)(LogLevel, const string&);
@@ -89,45 +97,45 @@
 
     #define IVI_LOG_CRITICAL(...) IVI_LOG(CRITICAL, __VA_ARGS__)
 
-    #if IVI_LOGGING_LEVEL >= 2
+    #if IVI_LOGGING_LEVEL >= IVI_LOGGING_LEVEL_WARNING
         #define IVI_LOG_WARNING(...) IVI_LOG(WARNING, __VA_ARGS__)
     #else
         #define IVI_LOG_WARNING(...)
-    #endif // IVI_LOGGING_LEVEL >= 2
+    #endif // IVI_LOGGING_LEVEL >= IVI_LOGGING_LEVEL_WARNING
 
-    #if IVI_LOGGING_LEVEL >= 3
+    #if IVI_LOGGING_LEVEL >= IVI_LOGGING_LEVEL_RPC_FAIL
         #define IVI_LOG_RPC_FAIL(...) IVI_LOG(RPC_FAIL, __VA_ARGS__)
     #else
         #define IVI_LOG_RPC_FAIL(...)
-    #endif // IVI_LOGGING_LEVEL >= 3
+    #endif // IVI_LOGGING_LEVEL >= IVI_LOGGING_LEVEL_RPC_FAIL
 
 
-    #if IVI_LOGGING_LEVEL >= 4
+    #if IVI_LOGGING_LEVEL >= IVI_LOGGING_LEVEL_INFO
         #define IVI_LOG_INFO(...) IVI_LOG(INFO, __VA_ARGS__)
     #else
         #define IVI_LOG_INFO(...)
-    #endif // IVI_LOGGING_LEVEL >= 4
+    #endif // IVI_LOGGING_LEVEL >= IVI_LOGGING_LEVEL_INFO
 
-    #if IVI_LOGGING_LEVEL >= 5
+    #if IVI_LOGGING_LEVEL >= IVI_LOGGING_LEVEL_VERBOSE
         #define IVI_LOG_VERBOSE(...) IVI_LOG(VERBOSE, __VA_ARGS__)
     #else
         #define IVI_LOG_VERBOSE(...)
-    #endif // IVI_LOGGING_LEVEL >= 5
+    #endif // IVI_LOGGING_LEVEL >= IVI_LOGGING_LEVEL_VERBOSE
 
-    #if IVI_LOGGING_LEVEL >= 6
+    #if IVI_LOGGING_LEVEL >= IVI_LOGGING_LEVEL_NTRACE
         #define IVI_LOG_NTRACE(...) IVI_LOG(VERBOSE, __VA_ARGS__)
     #else
         #define IVI_LOG_NTRACE(...)
-    #endif // IVI_LOGGING_LEVEL >= 6
+    #endif // IVI_LOGGING_LEVEL >= IVI_LOGGING_LEVEL_NTRACE
 
 
-    #if IVI_LOGGING_LEVEL >= 7
+    #if IVI_LOGGING_LEVEL >= IVI_LOGGING_LEVEL_DTRACE
         #define IVI_LOG_DTRACE(...) IVI_LOG(DTRACE, __VA_ARGS__)
         #define IVI_LOG_SCOPE(x) ::ivi::LogScope __logScope__(x);
     #else
         #define IVI_LOG_DTRACE(...)
         #define IVI_LOG_SCOPE(...)
-    #endif // IVI_LOGGING_LEVEL >= 7
+    #endif // IVI_LOGGING_LEVEL >= IVI_LOGGING_LEVEL_DTRACE
 
     namespace ivi
     {

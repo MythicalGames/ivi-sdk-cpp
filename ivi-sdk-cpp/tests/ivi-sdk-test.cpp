@@ -58,7 +58,7 @@ TInt RandomInt()
 template<typename TInt = uint32_t>
 TInt RandomInt(TInt min, TInt maxExcl)
 {
-    return std::uniform_int_distribution<TInt>(min, maxExcl - 1)(RandomEng());
+    return min == maxExcl ? min : std::uniform_int_distribution<TInt>(min, maxExcl - 1)(RandomEng());
 }
 
 template<typename TInt = uint32_t>
@@ -2204,17 +2204,19 @@ TEST_F(PlayerStreamTest, UpdateStream)
     ClientStreamTest::template StreamTest(FakeOnPlayerUpdatedCount, confirmChecker);
 }
 
-
 class FakeBrokenPaymentService : public rpc::api::payment::PaymentService::Service
 {
 public:
-    bool ErrorMode = true;
+    bool HttpErrorMode = false;
     ::grpc::Status GenerateClientToken(::grpc::ServerContext* context, const ::ivi::proto::api::payment::CreateTokenRequest* request, ::ivi::proto::api::payment::Token* response) override
     {
-        if (ErrorMode)
-            return AnError(::grpc::StatusCode::NOT_FOUND);
-        else
-            return ::grpc::Status::OK;
+        if (HttpErrorMode)
+        {
+            context->AddTrailingMetadata("httpcode", "422");
+            return AnError(::grpc::StatusCode::CANCELLED);
+        }
+
+        return AnError(::grpc::StatusCode::NOT_FOUND);
     }
 };
 
@@ -2239,13 +2241,17 @@ TEST_F(UnaryErrorClientTest, LogAndRecover)
         auto asyncPaymentCaller = [&](const RPCTestData& data, const function<void(const IVIResultToken&)>& callback)
         { return m_asyncManager->PaymentClient().GetToken(PaymentProviderId::BRAINTREE, "abc123", callback); };
 
-        m_service.ErrorMode = true;
-
         ASSERT_EQ(LogFilter::GetLogCounter()[static_cast<int>(LogLevel::RPC_FAIL)], 0);
+        ASSERT_EQ(LogFilter::GetLogCounter()[static_cast<int>(LogLevel::WARNING)], 0);
+        ASSERT_EQ(LogFilter::GetLogCounter()[static_cast<int>(LogLevel::CRITICAL)], 0);
+
         ClientTest::template UnaryTest<RPCTestData>(checkResultFailure, syncPaymentCaller, asyncPaymentCaller);
-        ASSERT_EQ(LogFilter::GetLogCounter()[static_cast<int>(LogLevel::RPC_FAIL)], IVI_LOGGING_LEVEL >= 3 ? 2 : 0);
+        
+        ASSERT_EQ(LogFilter::GetLogCounter()[static_cast<int>(LogLevel::RPC_FAIL)], IVI_LOGGING_LEVEL >= IVI_LOGGING_LEVEL_RPC_FAIL ? 2 : 0);
+        
         ClientTest::template UnaryTest<RPCTestData>(checkResultFailure, syncPaymentCaller, asyncPaymentCaller);
-        ASSERT_EQ(LogFilter::GetLogCounter()[static_cast<int>(LogLevel::RPC_FAIL)], IVI_LOGGING_LEVEL >= 3 ? 4 : 0);
+        
+        ASSERT_EQ(LogFilter::GetLogCounter()[static_cast<int>(LogLevel::RPC_FAIL)], IVI_LOGGING_LEVEL >= IVI_LOGGING_LEVEL_RPC_FAIL ? 4 : 0);
         ASSERT_EQ(LogFilter::GetLogCounter()[static_cast<int>(LogLevel::WARNING)], 0);
         ASSERT_EQ(LogFilter::GetLogCounter()[static_cast<int>(LogLevel::CRITICAL)], 0);
         ASSERT_EQ(callbackCount, 4);
@@ -2267,17 +2273,55 @@ TEST_F(UnaryErrorClientTest, LogAndRecover)
         auto asyncOrderCaller = [&](const RPCTestData& data, const function<void(const IVIResultOrder&)>& callback)
         { return m_asyncManager->OrderClient().GetOrder("abc123", callback); };
 
+        ASSERT_EQ(LogFilter::GetLogCounter()[static_cast<int>(LogLevel::RPC_FAIL)], 0);
         ASSERT_EQ(LogFilter::GetLogCounter()[static_cast<int>(LogLevel::WARNING)], 0);
+        ASSERT_EQ(LogFilter::GetLogCounter()[static_cast<int>(LogLevel::CRITICAL)], 0);
+
         ClientTest::template UnaryTest<RPCTestData>(checkResultFailure, syncOrderCaller, asyncOrderCaller);
-        ASSERT_EQ(LogFilter::GetLogCounter()[static_cast<int>(LogLevel::RPC_FAIL)], IVI_LOGGING_LEVEL >= 3 ? 2 : 0);
+        
+        ASSERT_EQ(LogFilter::GetLogCounter()[static_cast<int>(LogLevel::RPC_FAIL)], IVI_LOGGING_LEVEL >= IVI_LOGGING_LEVEL_RPC_FAIL ? 2 : 0);
+        
         ClientTest::template UnaryTest<RPCTestData>(checkResultFailure, syncOrderCaller, asyncOrderCaller);
-        ASSERT_EQ(LogFilter::GetLogCounter()[static_cast<int>(LogLevel::RPC_FAIL)], IVI_LOGGING_LEVEL >= 3 ? 4 : 0);
+        
+        ASSERT_EQ(LogFilter::GetLogCounter()[static_cast<int>(LogLevel::RPC_FAIL)], IVI_LOGGING_LEVEL >= IVI_LOGGING_LEVEL_RPC_FAIL ? 4 : 0);
+        ASSERT_EQ(LogFilter::GetLogCounter()[static_cast<int>(LogLevel::WARNING)], 0);
+        ASSERT_EQ(LogFilter::GetLogCounter()[static_cast<int>(LogLevel::CRITICAL)], 0);
+        ASSERT_EQ(callbackCount, 4);
+    }
+
+    // Test an HTTP error code
+    {
+        LogFilter::GetLogCounter().clear();
+        m_service.HttpErrorMode = true;
+        int callbackCount = 0;
+        auto checkResultFailure = [&callbackCount](const RPCTestData& data, const IVIResultToken& result)
+        {
+            ASSERT_FALSE(result.Success());
+            ASSERT_EQ(result.Status(), IVIResultStatus::UNPROCESSABLE_ENTITY);
+            ++callbackCount;
+        };
+
+        auto syncPaymentCaller = [&](const RPCTestData& data)
+        { return m_syncManager->PaymentClient().GetToken(PaymentProviderId::BRAINTREE, "abc123"); };
+        auto asyncPaymentCaller = [&](const RPCTestData& data, const function<void(const IVIResultToken&)>& callback)
+        { return m_asyncManager->PaymentClient().GetToken(PaymentProviderId::BRAINTREE, "abc123", callback); };
+
+        ASSERT_EQ(LogFilter::GetLogCounter()[static_cast<int>(LogLevel::RPC_FAIL)], 0);
+        ASSERT_EQ(LogFilter::GetLogCounter()[static_cast<int>(LogLevel::WARNING)], 0);
+        ASSERT_EQ(LogFilter::GetLogCounter()[static_cast<int>(LogLevel::CRITICAL)], 0);
+
+        ClientTest::template UnaryTest<RPCTestData>(checkResultFailure, syncPaymentCaller, asyncPaymentCaller);
+
+        ASSERT_EQ(LogFilter::GetLogCounter()[static_cast<int>(LogLevel::RPC_FAIL)], IVI_LOGGING_LEVEL >= IVI_LOGGING_LEVEL_RPC_FAIL ? 2 : 0);
+
+        ClientTest::template UnaryTest<RPCTestData>(checkResultFailure, syncPaymentCaller, asyncPaymentCaller);
+
+        ASSERT_EQ(LogFilter::GetLogCounter()[static_cast<int>(LogLevel::RPC_FAIL)], IVI_LOGGING_LEVEL >= IVI_LOGGING_LEVEL_RPC_FAIL ? 4 : 0);
         ASSERT_EQ(LogFilter::GetLogCounter()[static_cast<int>(LogLevel::WARNING)], 0);
         ASSERT_EQ(LogFilter::GetLogCounter()[static_cast<int>(LogLevel::CRITICAL)], 0);
         ASSERT_EQ(callbackCount, 4);
     }
 }
-
 
 static IVIStreamCallbacks StreamErrorTestingCallbacks =
 {
@@ -2310,4 +2354,3 @@ TEST_F(StreamErrorClientTest, LogAndRecover)
     }
     ASSERT_TRUE(shouldContinue);
 }
-
