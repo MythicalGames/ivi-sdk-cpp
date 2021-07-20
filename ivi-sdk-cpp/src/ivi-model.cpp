@@ -53,7 +53,7 @@ IVIMetadata IVIMetadata::FromProto(const proto::common::Metadata& metadata)
          metadata.name()
         ,metadata.description()
         ,metadata.image()
-        ,metadata.has_properties() ? GoogleStructToJsonString(metadata.properties()) : ""
+        ,GoogleStructToJsonString(metadata.properties())
     };
 }
 
@@ -63,10 +63,7 @@ proto::common::Metadata IVIMetadata::ToProto() const
     retVal.set_name(name);
     retVal.set_description(description);
     retVal.set_image(image);
-    if (properties.size() > 0)
-    {
-        *retVal.mutable_properties() = JsonStringToGoogleStruct(properties);
-    }
+    *retVal.mutable_properties() = JsonStringToGoogleStruct(properties);
     return retVal;
 }
 
